@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.relaychat.app.progress.tests">
+    <application android:label="RelayChat progress tests" />
+    <instrumentation android:name="com.relaychat.app.progress.ProgressInstrumentation"
+        android:targetPackage="com.relaychat.app" />
+</manifest>

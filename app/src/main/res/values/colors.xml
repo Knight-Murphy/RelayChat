@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <color name="relay_ink">#17211F</color>
+    <color name="relay_muted">#66736F</color>
+    <color name="relay_accent">#0F766E</color>
+    <color name="relay_surface">#FFFFFF</color>
+    <color name="relay_canvas">#F4F6F3</color>
+</resources>
