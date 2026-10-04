@@ -1,5 +1,6 @@
 package com.relaychat.app.network;
 
+import com.relaychat.app.BuildConfig;
 import com.relaychat.app.model.ChatMessage;
 import com.relaychat.app.model.ImageAttachment;
 import com.relaychat.app.model.ProviderProfile;
@@ -565,7 +566,7 @@ public final class ApiClient {
         connection.setReadTimeout("GET".equals(method) ? MODEL_READ_TIMEOUT_MS : REPLY_READ_TIMEOUT_MS);
         connection.setRequestProperty("Accept", accept);
         connection.setRequestProperty("Accept-Encoding", "identity");
-        connection.setRequestProperty("User-Agent", "RelayChat/1.0 Android");
+        connection.setRequestProperty("User-Agent", "RelayChat/" + BuildConfig.VERSION_NAME + " Android");
         if (!provider.getApiKey().isEmpty()) {
             connection.setRequestProperty("Authorization", "Bearer " + provider.getApiKey());
         }

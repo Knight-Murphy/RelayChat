@@ -34,6 +34,21 @@ With an existing Android SDK, build an APK directly:
 
 The signed debug APK is written to `dist\RelayChat-debug.apk`.
 
+### Versioning
+
+The Android version is defined once in `version.properties`, and both Gradle and
+`build-apk.ps1` use that file:
+
+```properties
+versionCode=2
+versionName=1.0.1
+```
+
+For every installable update, increase `versionCode`; change `versionName` when
+the user-visible version should change. The APK must also keep the same
+application ID and signing key as the installed version, otherwise Android
+cannot install it as an update.
+
 ## Install
 
 Enable installation from unknown sources for the file manager or browser you use, then install:

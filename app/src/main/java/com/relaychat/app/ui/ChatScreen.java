@@ -55,6 +55,10 @@ public final class ChatScreen extends LinearLayout {
     private final TextView backgroundSupportLabel;
     private final Button conversationButton;
     private final TextView headerSubtitle;
+    private LinearLayout selectorDetails;
+    private TextView selectorSummary;
+    private Button selectorToggle;
+    private boolean selectorExpanded;
 
     private boolean bindingSelection;
     private String displayedModel;
@@ -114,6 +118,7 @@ public final class ChatScreen extends LinearLayout {
         input = UiKit.input(context, "输入消息", true);
         input.setMaxLines(6);
         input.setMinLines(1);
+        input.setGravity(Gravity.CENTER_VERTICAL | Gravity.START);
         input.setRawInputType(android.text.InputType.TYPE_CLASS_TEXT
                 | android.text.InputType.TYPE_TEXT_FLAG_CAP_SENTENCES);
         input.setImeOptions(EditorInfo.IME_ACTION_SEND);
@@ -185,6 +190,7 @@ public final class ChatScreen extends LinearLayout {
             refreshModelsButton.setEnabled(selected != null && !selected.getBaseUrl().isEmpty());
         }
         bindingSelection = false;
+        updateSelectorSummary();
         recordModelChange(host.getSelectedProvider());
         rebuildMessages();
         setSending(host.getChatSession().isSending());
@@ -195,6 +201,7 @@ public final class ChatScreen extends LinearLayout {
         if (backgroundSupportLabel != null) {
             backgroundSupportLabel.setVisibility(
                     host.isBackgroundReplyRestricted() ? View.VISIBLE : View.GONE);
+            updateSelectorVisibility();
         }
     }
 
@@ -204,31 +211,33 @@ public final class ChatScreen extends LinearLayout {
 
     private View buildHeader() {
         LinearLayout header = UiKit.horizontal(getContext());
-        header.setPadding(UiKit.dp(getContext(), 16), UiKit.dp(getContext(), 12),
-                UiKit.dp(getContext(), 12), UiKit.dp(getContext(), 12));
+        header.setPadding(UiKit.dp(getContext(), 18), UiKit.dp(getContext(), 9),
+                UiKit.dp(getContext(), 18), UiKit.dp(getContext(), 9));
         header.setBackgroundColor(UiKit.SURFACE);
-        header.setElevation(UiKit.dp(getContext(), 2));
+        header.setMinimumHeight(UiKit.dp(getContext(), 70));
 
         LinearLayout titles = UiKit.vertical(getContext());
-        TextView title = UiKit.heading(getContext(), "RelayChat", 20);
-        TextView subtitle = UiKit.text(getContext(), "自定义 API 对话", 12, UiKit.MUTED);
+        TextView title = UiKit.heading(getContext(), "RelayChat", 22);
+        TextView subtitle = UiKit.text(getContext(), "", 1, UiKit.MUTED);
         subtitle.setTag("header_subtitle");
-        subtitle.setMaxLines(1);
-        subtitle.setEllipsize(TextUtils.TruncateAt.END);
+        subtitle.setVisibility(View.GONE);
+        LinearLayout.LayoutParams titleParams = new LinearLayout.LayoutParams(
+                0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f);
         titles.addView(title);
         titles.addView(subtitle);
-        header.addView(titles, new LinearLayout.LayoutParams(0,
-                ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        header.addView(titles, titleParams);
 
-        Button conversations = UiKit.compactButton(getContext(), "会话", false);
+        Button conversations = UiKit.button(getContext(), "会话", false);
+        UiKit.setIcon(conversations, UiKit.Icon.USERS, getContext());
         conversations.setTag("conversation_button");
         conversations.setOnClickListener(view -> host.showConversations());
         header.addView(conversations);
 
-        Button settings = UiKit.compactButton(getContext(), "设置", false);
+        Button settings = UiKit.button(getContext(), "设置", false);
+        UiKit.setIcon(settings, UiKit.Icon.GEAR, getContext());
         LinearLayout.LayoutParams settingsParams = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        settingsParams.leftMargin = UiKit.dp(getContext(), 8);
+        settingsParams.leftMargin = UiKit.dp(getContext(), 12);
         settings.setOnClickListener(view -> host.showSettings());
         header.addView(settings, settingsParams);
         return header;
@@ -236,9 +245,38 @@ public final class ChatScreen extends LinearLayout {
 
     private View buildSelector() {
         LinearLayout selector = UiKit.vertical(getContext());
-        selector.setPadding(UiKit.dp(getContext(), 12), UiKit.dp(getContext(), 10),
-                UiKit.dp(getContext(), 12), UiKit.dp(getContext(), 10));
+        selector.setPadding(UiKit.dp(getContext(), 18), UiKit.dp(getContext(), 2),
+                UiKit.dp(getContext(), 18), UiKit.dp(getContext(), 2));
         selector.setBackgroundColor(UiKit.SURFACE);
+
+        LinearLayout summaryRow = UiKit.horizontal(getContext());
+        summaryRow.setMinimumHeight(UiKit.dp(getContext(), 40));
+        selectorSummary = UiKit.text(getContext(), "未配置服务商 · 未选择模型", 13, UiKit.MUTED);
+        selectorSummary.setSingleLine(true);
+        selectorSummary.setEllipsize(TextUtils.TruncateAt.END);
+        selectorSummary.setMaxWidth(UiKit.dp(getContext(), 260));
+        summaryRow.addView(selectorSummary, new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        selectorToggle = UiKit.iconButton(getContext(), UiKit.Icon.TRIANGLE_DOWN, false);
+        selectorToggle.setContentDescription("展开服务商和模型选择");
+        selectorToggle.setBackground(null);
+        selectorToggle.setMinWidth(0);
+        selectorToggle.setMinimumWidth(0);
+        selectorToggle.setMinHeight(0);
+        selectorToggle.setMinimumHeight(0);
+        selectorToggle.setPadding(UiKit.dp(getContext(), 2), 0,
+                UiKit.dp(getContext(), 2), 0);
+        summaryRow.addView(selectorToggle, new LinearLayout.LayoutParams(
+                UiKit.dp(getContext(), 28), UiKit.dp(getContext(), 40)));
+        selectorToggle.setOnClickListener(view -> {
+            selectorExpanded = !selectorExpanded;
+            updateSelectorVisibility();
+        });
+        selector.addView(summaryRow);
+
+        selectorDetails = UiKit.vertical(getContext());
+        selectorDetails.setVisibility(View.GONE);
+        selector.addView(selectorDetails);
 
         LinearLayout row = UiKit.horizontal(getContext());
         row.setGravity(Gravity.TOP);
@@ -251,14 +289,7 @@ public final class ChatScreen extends LinearLayout {
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
         LinearLayout modelColumn = UiKit.vertical(getContext());
-        LinearLayout modelHeader = UiKit.horizontal(getContext());
-        TextView modelLabel = label("模型");
-        modelHeader.addView(modelLabel, new LinearLayout.LayoutParams(0,
-                ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
-        Button refresh = UiKit.compactButton(getContext(), "刷新", false);
-        refresh.setTag("refresh_models");
-        modelHeader.addView(refresh);
-        modelColumn.addView(modelHeader);
+        modelColumn.addView(label("模型"));
         Spinner model = UiKit.spinner(getContext(), Collections.singletonList(""));
         model.setTag("model_spinner");
         modelColumn.addView(model, new LinearLayout.LayoutParams(
@@ -267,15 +298,24 @@ public final class ChatScreen extends LinearLayout {
         row.addView(providerColumn, new LinearLayout.LayoutParams(0,
                 ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
         LinearLayout.LayoutParams modelParams = new LinearLayout.LayoutParams(0,
-                ViewGroup.LayoutParams.WRAP_CONTENT, 1.45f);
-        modelParams.leftMargin = UiKit.dp(getContext(), 10);
+                ViewGroup.LayoutParams.WRAP_CONTENT, 1.18f);
+        modelParams.leftMargin = UiKit.dp(getContext(), 22);
         row.addView(modelColumn, modelParams);
-        selector.addView(row);
+
+        Button refresh = UiKit.button(getContext(), "刷新", false);
+        UiKit.setIcon(refresh, UiKit.Icon.REFRESH, getContext());
+        refresh.setTag("refresh_models");
+        LinearLayout.LayoutParams refreshParams = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        refreshParams.leftMargin = UiKit.dp(getContext(), 20);
+        refreshParams.topMargin = UiKit.dp(getContext(), 8);
+        row.addView(refresh, refreshParams);
+        selectorDetails.addView(row);
 
         TextView status = UiKit.text(getContext(), "", 11, UiKit.MUTED);
         status.setTag("connection_label");
         LinearLayout.LayoutParams statusParams = UiKit.matchWrap(UiKit.dp(getContext(), 5), 0);
-        selector.addView(status, statusParams);
+        selectorDetails.addView(status, statusParams);
 
         TextView backgroundSupport = UiKit.text(getContext(),
                 "后台回答可能受省电限制 · 点击允许后台运行", 12, UiKit.WARM);
@@ -283,7 +323,7 @@ public final class ChatScreen extends LinearLayout {
         int supportPadding = UiKit.dp(getContext(), 8);
         backgroundSupport.setPadding(supportPadding, supportPadding, supportPadding, supportPadding);
         backgroundSupport.setOnClickListener(view -> host.allowBackgroundReplies());
-        selector.addView(backgroundSupport, UiKit.matchWrap(UiKit.dp(getContext(), 4), 0));
+        selectorDetails.addView(backgroundSupport, UiKit.matchWrap(UiKit.dp(getContext(), 4), 0));
 
         provider.setOnItemSelectedListener(new AdapterView.OnItemSelectedListener() {
             @Override
@@ -325,6 +365,7 @@ public final class ChatScreen extends LinearLayout {
                 provider.setSelectedModel(model);
                 host.persistProviders();
                 connectionLabel.setText(modeLabel(provider.getMode()) + " · " + provider.getSelectedModel());
+                updateSelectorSummary();
                 if (recordModelChange(provider)) {
                     rebuildMessages();
                 }
@@ -339,12 +380,41 @@ public final class ChatScreen extends LinearLayout {
         return selector;
     }
 
+    private void updateSelectorVisibility() {
+        if (selectorDetails == null) {
+            return;
+        }
+        boolean showDetails = selectorExpanded || host.isBackgroundReplyRestricted();
+        selectorDetails.setVisibility(showDetails ? View.VISIBLE : View.GONE);
+        if (selectorToggle != null) {
+            UiKit.setIcon(selectorToggle,
+                    selectorExpanded ? UiKit.Icon.TRIANGLE_UP : UiKit.Icon.TRIANGLE_DOWN,
+                    getContext());
+            selectorToggle.setContentDescription(selectorExpanded
+                    ? "收起服务商和模型选择" : "展开服务商和模型选择");
+        }
+    }
+
+    private void updateSelectorSummary() {
+        if (selectorSummary == null) {
+            return;
+        }
+        ProviderProfile provider = host.getSelectedProvider();
+        if (provider == null) {
+            selectorSummary.setText("未配置服务商 · 未选择模型");
+            return;
+        }
+        String model = provider.getSelectedModel().isEmpty()
+                ? "未选择模型" : provider.getSelectedModel();
+        selectorSummary.setText(provider.getName() + " · " + model);
+    }
+
     private View buildComposer() {
         LinearLayout composer = UiKit.vertical(getContext());
-        composer.setPadding(UiKit.dp(getContext(), 10), UiKit.dp(getContext(), 9),
-                UiKit.dp(getContext(), 10), UiKit.dp(getContext(), 9));
+        composer.setPadding(UiKit.dp(getContext(), 29), UiKit.dp(getContext(), 8),
+                UiKit.dp(getContext(), 29), UiKit.dp(getContext(), 8));
         composer.setBackgroundColor(UiKit.SURFACE);
-        composer.setElevation(UiKit.dp(getContext(), 6));
+        composer.setElevation(UiKit.dp(getContext(), 2));
 
         attachmentStrip = UiKit.horizontal(getContext());
         attachmentStrip.setVisibility(View.GONE);
@@ -354,18 +424,24 @@ public final class ChatScreen extends LinearLayout {
         LinearLayout row = UiKit.horizontal(getContext());
         row.setGravity(Gravity.BOTTOM);
 
-        attachButton = UiKit.compactButton(getContext(), "图片", false);
+        attachButton = UiKit.iconButton(getContext(), UiKit.Icon.IMAGE, false);
+        attachButton.setContentDescription("添加图片");
+        attachButton.setMinWidth(UiKit.dp(getContext(), 56));
+        attachButton.setMinHeight(UiKit.dp(getContext(), 48));
         attachButton.setOnClickListener(view -> host.pickImages());
         LinearLayout.LayoutParams attachParams = new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        attachParams.rightMargin = UiKit.dp(getContext(), 8);
+                UiKit.dp(getContext(), 56), UiKit.dp(getContext(), 48));
+        attachParams.rightMargin = UiKit.dp(getContext(), 10);
         row.addView(attachButton, attachParams);
 
+        input.setMinHeight(UiKit.dp(getContext(), 48));
         row.addView(input, new LinearLayout.LayoutParams(0,
                 ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
         LinearLayout.LayoutParams sendParams = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-        sendParams.leftMargin = UiKit.dp(getContext(), 8);
+        sendParams.leftMargin = UiKit.dp(getContext(), 10);
+        sendButton.setMinHeight(UiKit.dp(getContext(), 48));
+        UiKit.setIcon(sendButton, UiKit.Icon.SEND, getContext());
         row.addView(sendButton, sendParams);
         composer.addView(row, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
@@ -530,10 +606,12 @@ public final class ChatScreen extends LinearLayout {
             sendButton.setBackground(UiKit.rounded(UiKit.WARM_SOFT, UiKit.dp(getContext(), 8),
                     UiKit.WARM, UiKit.dp(getContext(), 1)));
             sendButton.setTextColor(UiKit.WARM);
+            UiKit.setIcon(sendButton, UiKit.Icon.SEND, getContext());
         } else {
             sendButton.setBackground(UiKit.rounded(UiKit.ACCENT, UiKit.dp(getContext(), 8),
                     UiKit.ACCENT, UiKit.dp(getContext(), 1)));
             sendButton.setTextColor(android.graphics.Color.WHITE);
+            UiKit.setIcon(sendButton, UiKit.Icon.SEND, getContext());
             input.requestFocus();
         }
     }
@@ -577,29 +655,32 @@ public final class ChatScreen extends LinearLayout {
     private View buildEmptyState() {
         LinearLayout panel = UiKit.vertical(getContext());
         panel.setGravity(Gravity.CENTER);
-        panel.setPadding(UiKit.dp(getContext(), 24), UiKit.dp(getContext(), 48),
+        panel.setPadding(UiKit.dp(getContext(), 24), UiKit.dp(getContext(), 32),
                 UiKit.dp(getContext(), 24), UiKit.dp(getContext(), 24));
 
         ProviderProfile provider = host.getSelectedProvider();
+        TextView icon = UiKit.iconView(getContext(), UiKit.Icon.CHAT, UiKit.MUTED);
+        panel.addView(icon, new LinearLayout.LayoutParams(
+                UiKit.dp(getContext(), 64), UiKit.dp(getContext(), 64)));
         if (provider == null) {
-            TextView title = UiKit.heading(getContext(), "尚未配置 API", 19);
+            TextView title = UiKit.heading(getContext(), "尚未配置 API", 24);
             title.setGravity(Gravity.CENTER);
             TextView detail = UiKit.text(getContext(),
-                    "添加兼容 OpenAI 接口的中转站后即可开始对话。", 14, UiKit.MUTED);
+                    "添加兼容 OpenAI 接口的中转站后即可开始对话。", 15, UiKit.MUTED);
             detail.setGravity(Gravity.CENTER);
             Button add = UiKit.button(getContext(), "添加服务商", true);
             add.setOnClickListener(view -> host.showSettings());
-            panel.addView(title);
+            panel.addView(title, UiKit.matchWrap(UiKit.dp(getContext(), 12), 0));
             panel.addView(detail, UiKit.matchWrap(UiKit.dp(getContext(), 8), UiKit.dp(getContext(), 18)));
             panel.addView(add, new LinearLayout.LayoutParams(
                     ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
         } else {
-            TextView title = UiKit.heading(getContext(), "开始新的对话", 19);
+            TextView title = UiKit.heading(getContext(), "开始新的对话", 24);
             title.setGravity(Gravity.CENTER);
             String model = provider.getSelectedModel().isEmpty() ? "尚未选择模型" : provider.getSelectedModel();
-            TextView detail = UiKit.text(getContext(), provider.getName() + " · " + model, 13, UiKit.MUTED);
+            TextView detail = UiKit.text(getContext(), provider.getName() + " · " + model, 15, UiKit.MUTED);
             detail.setGravity(Gravity.CENTER);
-            panel.addView(title);
+            panel.addView(title, UiKit.matchWrap(UiKit.dp(getContext(), 12), 0));
             panel.addView(detail, UiKit.matchWrap(UiKit.dp(getContext(), 8), 0));
         }
         return panel;
@@ -626,68 +707,72 @@ public final class ChatScreen extends LinearLayout {
     }
 
     private void addUserMessageBubble(ChatMessage message) {
-        LinearLayout bubble = UiKit.vertical(getContext());
-        bubble.setPadding(UiKit.dp(getContext(), 10), UiKit.dp(getContext(), 9),
-                UiKit.dp(getContext(), 10), UiKit.dp(getContext(), 9));
-        bubble.setBackground(UiKit.rounded(UiKit.ACCENT, UiKit.dp(getContext(), 8),
-                UiKit.ACCENT, 0));
-
         List<ImageAttachment> attachments = message.getAttachments();
         if (!attachments.isEmpty()) {
-            int maxHeight = UiKit.dp(getContext(), 132);
+            int available = Math.max(UiKit.dp(getContext(), 120),
+                    maxBubbleWidth());
+            int maxWidth = available;
+            int maxHeight = UiKit.dp(getContext(), attachments.size() == 1 ? 360 : 132);
             int gap = UiKit.dp(getContext(), 6);
             int[] widths = new int[attachments.size()];
+            int[] heights = new int[attachments.size()];
             List<Bitmap> bitmaps = new ArrayList<>();
             int total = 0;
             for (int index = 0; index < attachments.size(); index++) {
                 Bitmap bitmap = thumbnailFor(attachments.get(index), maxHeight);
                 bitmaps.add(bitmap);
-                int width = maxHeight;
-                if (bitmap != null && bitmap.getWidth() > 0 && bitmap.getHeight() > 0) {
-                    width = Math.max(1, Math.round(maxHeight
-                            * (bitmap.getWidth() / (float) bitmap.getHeight())));
+                float aspect = bitmap != null && bitmap.getWidth() > 0 && bitmap.getHeight() > 0
+                        ? bitmap.getWidth() / (float) bitmap.getHeight() : 1f;
+                int width = Math.max(1, Math.round(maxHeight * aspect));
+                int height = maxHeight;
+                if (attachments.size() == 1 && width > maxWidth) {
+                    width = maxWidth;
+                    height = Math.max(1, Math.round(width / aspect));
                 }
                 widths[index] = width;
+                heights[index] = height;
                 total += width;
             }
-            int available = Math.max(UiKit.dp(getContext(), 120),
-                    maxBubbleWidth() - UiKit.dp(getContext(), 20) - gap * (attachments.size() - 1));
+            available = Math.max(UiKit.dp(getContext(), 120),
+                    available - gap * (attachments.size() - 1));
             double factor = total > available ? available / (double) total : 1d;
 
             LinearLayout images = UiKit.horizontal(getContext());
             for (int index = 0; index < attachments.size(); index++) {
                 ImageView preview = new ImageView(getContext());
-                preview.setScaleType(ImageView.ScaleType.FIT_CENTER);
-                preview.setBackground(UiKit.rounded(0x33FFFFFF, UiKit.dp(getContext(), 6),
-                        UiKit.ACCENT, 0));
+                preview.setAdjustViewBounds(true);
+                preview.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
+                preview.setBackground(UiKit.rounded(UiKit.SURFACE, UiKit.dp(getContext(), 8),
+                        UiKit.BORDER, UiKit.dp(getContext(), 1)));
                 preview.setClipToOutline(true);
                 preview.setOutlineProvider(ViewOutlineProvider.BACKGROUND);
                 preview.setImageBitmap(bitmaps.get(index));
+                ImageAttachment attachment = attachments.get(index);
+                preview.setContentDescription("查看图片");
+                preview.setOnClickListener(view -> ImageViewerDialog.show(getContext(), attachment));
                 LinearLayout.LayoutParams imageParams = new LinearLayout.LayoutParams(
-                        Math.max(UiKit.dp(getContext(), 40), (int) Math.round(widths[index] * factor)),
-                        Math.max(UiKit.dp(getContext(), 40), (int) Math.round(maxHeight * factor)));
+                        Math.max(1, (int) Math.round(widths[index] * factor)),
+                        Math.max(1, (int) Math.round(heights[index] * factor)));
                 if (index > 0) {
                     imageParams.leftMargin = gap;
                 }
                 images.addView(preview, imageParams);
             }
-            bubble.addView(images);
+            addBubbleRow(images, true);
         }
 
         if (!message.getContent().trim().isEmpty()) {
+            LinearLayout bubble = UiKit.vertical(getContext());
+            bubble.setPadding(UiKit.dp(getContext(), 10), UiKit.dp(getContext(), 9),
+                    UiKit.dp(getContext(), 10), UiKit.dp(getContext(), 9));
+            bubble.setBackground(UiKit.rounded(UiKit.ACCENT, UiKit.dp(getContext(), 8),
+                    UiKit.ACCENT, 0));
             MarkdownView text = buildBody(maxBubbleWidth() - UiKit.dp(getContext(), 20));
             text.setMarkdown(message.getContent(), MarkdownRenderer.Palette.user(
                     getResources().getDisplayMetrics().density));
-            if (attachments.isEmpty()) {
-                bubble.addView(text);
-            } else {
-                LinearLayout.LayoutParams textParams = new LinearLayout.LayoutParams(
-                        ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
-                textParams.topMargin = UiKit.dp(getContext(), 6);
-                bubble.addView(text, textParams);
-            }
+            bubble.addView(text);
+            addBubbleRow(bubble, true);
         }
-        addBubbleRow(bubble, true);
     }
 
     private void refreshAttachmentStrip() {

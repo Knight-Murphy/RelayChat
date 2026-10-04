@@ -6,6 +6,7 @@ $ErrorActionPreference = "Stop"
 $root = $PSScriptRoot
 $build = Join-Path $root "build\manual"
 $dist = Join-Path $root "dist"
+$versionFile = Join-Path $root "version.properties"
 
 function Require-Path([string]$path, [string]$label) {
     if (-not (Test-Path -LiteralPath $path)) {
@@ -16,6 +17,28 @@ function Require-Path([string]$path, [string]$label) {
 Push-Location $root
 try {
     Require-Path $SdkRoot "Android SDK"
+    Require-Path $versionFile "version.properties"
+    $versionProperties = @{}
+    foreach ($line in Get-Content -LiteralPath $versionFile) {
+        $trimmed = $line.Trim()
+        if (-not $trimmed -or $trimmed.StartsWith("#")) {
+            continue
+        }
+        $parts = $trimmed.Split("=", 2)
+        if ($parts.Count -ne 2) {
+            throw "Invalid version.properties line: $line"
+        }
+        $versionProperties[$parts[0].Trim()] = $parts[1].Trim()
+    }
+    [int]$versionCode = 0
+    if (-not [int]::TryParse($versionProperties["versionCode"], [ref]$versionCode) -or $versionCode -le 0) {
+        throw "version.properties versionCode must be a positive integer"
+    }
+    $versionName = $versionProperties["versionName"]
+    if ([string]::IsNullOrWhiteSpace($versionName)) {
+        throw "version.properties versionName must not be empty"
+    }
+
     $buildTools = Get-ChildItem (Join-Path $SdkRoot "build-tools") -Directory |
         Where-Object { $_.Name -match "^\d+\.\d+\.\d+" -and (Test-Path (Join-Path $_.FullName "aapt2.exe")) } |
         Sort-Object { [version]$_.Name } -Descending |
@@ -74,14 +97,31 @@ try {
         --java (Join-Path $build "gen") `
         --min-sdk-version 23 `
         --target-sdk-version 36 `
-        --version-code 1 `
-        --version-name "1.0" `
+        --version-code $versionCode `
+        --version-name $versionName `
         --auto-add-overlay `
         -R (Join-Path $build "res.zip")
     if ($LASTEXITCODE -ne 0) { throw "aapt2 link failed" }
 
+    $buildConfigDirectory = Join-Path $build "gen\com\relaychat\app"
+    New-Item -ItemType Directory -Force $buildConfigDirectory | Out-Null
+    $buildConfigSource = @"
+package com.relaychat.app;
+
+public final class BuildConfig {
+    public static final String VERSION_NAME = "$versionName";
+
+    private BuildConfig() {
+    }
+}
+"@
+    [System.IO.File]::WriteAllText(
+        (Join-Path $buildConfigDirectory "BuildConfig.java"),
+        $buildConfigSource,
+        [System.Text.UTF8Encoding]::new($false))
+
     $javaFiles = @(Get-ChildItem (Join-Path $root "app\src\main\java") -Recurse -Filter *.java | ForEach-Object FullName)
-    $javaFiles += (Get-ChildItem (Join-Path $build "gen") -Recurse -Filter R.java | ForEach-Object FullName)
+    $javaFiles += (Get-ChildItem (Join-Path $build "gen") -Recurse -Filter *.java | ForEach-Object FullName)
     & $javac -encoding UTF-8 -source 17 -target 17 -Xlint:-options -classpath $androidJar -d (Join-Path $build "classes") $javaFiles
     if ($LASTEXITCODE -ne 0) { throw "javac failed" }
 
