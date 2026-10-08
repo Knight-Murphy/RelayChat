@@ -1,13 +1,15 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
 }
 
-val versionProperties = java.util.Properties().apply {
+val versionProperties = Properties().apply {
     val versionFile = rootProject.file("version.properties")
     require(versionFile.isFile) {
         "Missing version.properties at ${versionFile.absolutePath}"
     }
-    versionFile.inputStream().use(::load)
+    versionFile.inputStream().use { input -> load(input) }
 }
 val appVersionCode = versionProperties.getProperty("versionCode")?.toIntOrNull()
     ?: error("version.properties must define a numeric versionCode")

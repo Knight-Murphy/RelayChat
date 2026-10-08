@@ -37,7 +37,8 @@ public final class UiKit {
 
     public enum Icon {
         MENU, USERS, GEAR, REFRESH, IMAGE, SEND, CHAT,
-        CHEVRON_DOWN, CHEVRON_UP, TRIANGLE_DOWN, TRIANGLE_UP
+        CHEVRON_DOWN, CHEVRON_UP, TRIANGLE_DOWN, TRIANGLE_UP,
+        CLOSE, PENCIL, ERASER, UNDO, REDO, TRASH, ROTATE_LEFT, ROTATE_RIGHT
     }
 
     private UiKit() {
@@ -385,6 +386,83 @@ public final class UiKit {
                     path.lineTo(19 * unit, 15 * unit);
                     path.lineTo(12 * unit, 8 * unit);
                     path.close();
+                    canvas.drawPath(path, paint);
+                    break;
+                case CLOSE:
+                    canvas.drawLine(6 * unit, 6 * unit, 18 * unit, 18 * unit, paint);
+                    canvas.drawLine(18 * unit, 6 * unit, 6 * unit, 18 * unit, paint);
+                    break;
+                case PENCIL:
+                    paint.setStrokeWidth(2.2f * unit);
+                    path.reset();
+                    path.moveTo(5 * unit, 18 * unit);
+                    path.lineTo(7 * unit, 17.5f * unit);
+                    path.lineTo(18 * unit, 6.5f * unit);
+                    path.lineTo(16 * unit, 4.5f * unit);
+                    path.lineTo(5 * unit, 15.5f * unit);
+                    path.close();
+                    canvas.drawPath(path, paint);
+                    canvas.drawLine(5 * unit, 18 * unit, 5 * unit, 15.5f * unit, paint);
+                    break;
+                case ERASER:
+                    path.reset();
+                    path.moveTo(5 * unit, 15 * unit);
+                    path.lineTo(13 * unit, 7 * unit);
+                    path.lineTo(19 * unit, 13 * unit);
+                    path.lineTo(11 * unit, 21 * unit);
+                    path.close();
+                    canvas.drawPath(path, paint);
+                    canvas.drawLine(9 * unit, 11 * unit, 15 * unit, 17 * unit, paint);
+                    break;
+                case UNDO:
+                    paint.setStrokeWidth(2.2f * unit);
+                    paint.setStyle(Paint.Style.STROKE);
+                    path.reset();
+                    path.moveTo(19 * unit, 12 * unit);
+                    path.lineTo(5 * unit, 12 * unit);
+                    path.moveTo(5 * unit, 12 * unit);
+                    path.lineTo(10 * unit, 7 * unit);
+                    path.moveTo(5 * unit, 12 * unit);
+                    path.lineTo(10 * unit, 17 * unit);
+                    canvas.drawPath(path, paint);
+                    break;
+                case REDO:
+                    paint.setStrokeWidth(2.2f * unit);
+                    paint.setStyle(Paint.Style.STROKE);
+                    path.reset();
+                    path.moveTo(5 * unit, 12 * unit);
+                    path.lineTo(19 * unit, 12 * unit);
+                    path.moveTo(19 * unit, 12 * unit);
+                    path.lineTo(14 * unit, 7 * unit);
+                    path.moveTo(19 * unit, 12 * unit);
+                    path.lineTo(14 * unit, 17 * unit);
+                    canvas.drawPath(path, paint);
+                    break;
+                case TRASH:
+                    canvas.drawRect(7 * unit, 8 * unit, 17 * unit, 20 * unit, paint);
+                    canvas.drawLine(5 * unit, 8 * unit, 19 * unit, 8 * unit, paint);
+                    canvas.drawLine(9 * unit, 5 * unit, 15 * unit, 5 * unit, paint);
+                    break;
+                case ROTATE_LEFT:
+                case ROTATE_RIGHT:
+                    paint.setStrokeWidth(2.2f * unit);
+                    paint.setStyle(Paint.Style.STROKE);
+                    if (icon == Icon.ROTATE_LEFT) {
+                        canvas.scale(-1, 1, 12 * unit, 12 * unit);
+                    }
+                    path.reset();
+                    path.moveTo(18 * unit, 18 * unit);
+                    path.cubicTo(16.5f * unit, 19.5f * unit, 14.5f * unit, 20 * unit,
+                            12 * unit, 20 * unit);
+                    path.cubicTo(7.6f * unit, 20 * unit, 4 * unit, 16.4f * unit,
+                            4 * unit, 12 * unit);
+                    path.cubicTo(4 * unit, 7.6f * unit, 7.6f * unit, 4 * unit,
+                            12 * unit, 4 * unit);
+                    path.cubicTo(15.5f * unit, 4 * unit, 18 * unit, 5.5f * unit,
+                            20 * unit, 8 * unit);
+                    path.lineTo(20 * unit, 3 * unit);
+                    path.moveTo(20 * unit, 8 * unit);
+                    path.lineTo(15 * unit, 8 * unit);
                     canvas.drawPath(path, paint);
                     break;
             }

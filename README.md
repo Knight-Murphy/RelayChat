@@ -15,7 +15,8 @@ RelayChat is a small Android client for OpenAI-compatible API relays. It support
 - Render replies with formatting: headings, lists, quotes, tables, code blocks, bold/italic text and LaTeX math.
 - Stop an in-progress response.
 - Keep generating replies in a foreground service after leaving the app, and notify when a reply is saved.
-- Attach up to four images to a message with the `图片` button; they are sent to vision-capable models.
+- Attach up to four images to a message with the image button; they are sent to vision-capable models.
+- Edit attached images before sending: draw red marks, erase marks, undo/redo, clear marks, and rotate clockwise.
 - Keep several conversations, rename them, and switch between them from the `会话` button.
 - Save conversations and their images in app-private storage, so chats survive restarts.
 - Store API keys encrypted with Android Keystore AES-GCM.
@@ -40,8 +41,8 @@ The Android version is defined once in `version.properties`, and both Gradle and
 `build-apk.ps1` use that file:
 
 ```properties
-versionCode=2
-versionName=1.0.1
+versionCode=3
+versionName=1.0.2
 ```
 
 For every installable update, increase `versionCode`; change `versionName` when
@@ -71,7 +72,16 @@ Only HTTPS API roots are accepted. A relay can see prompts and responses, so onl
 
 ## Images
 
-Use the `图片` button beside the composer to pick one or more images from the system picker. A picked image is rotated by its EXIF orientation, scaled so its longest edge is at most 1536 px, and compressed to PNG or JPEG. The compressed bytes are sent as base64 data URLs inside the request: `image_url` parts for Chat Completions and `input_image` parts for the Responses API. The relay and the selected model must accept image input, otherwise the API returns an error. Compressed images are stored in the app's private files directory, so they return with their conversation on the next launch and are deleted together with it.
+Use the image button beside the composer to pick one or more images from the system picker. A picked image is rotated by its EXIF orientation, scaled so its longest edge is at most 1536 px, and compressed to PNG or JPEG. The compressed bytes are sent as base64 data URLs inside the request: `image_url` parts for Chat Completions and `input_image` parts for the Responses API. The relay and the selected model must accept image input, otherwise the API returns an error. Compressed images are stored in the app's private files directory, so they return with their conversation on the next launch and are deleted together with it.
+
+Tap an attachment thumbnail before sending to open the image editor. Draw red marks, erase
+marks, undo or redo mark changes, clear all marks, or rotate the image clockwise by 90 degrees.
+Rotation clears existing marks and their undo history. Apply edits with `完成` to replace the
+pending attachment with a JPEG, or close the editor to keep the original attachment.
+
+To verify the rotation icon and clockwise image rotation on a disposable Android emulator,
+run `assembleDebug`, then `.\tests\icons\run-tests.ps1 -Serial emulator-5554`. The
+instrumentation saves screenshots under `build/icon-tests/`.
 
 ## Rendering
 

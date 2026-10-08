@@ -805,6 +805,15 @@ public final class ChatScreen extends LinearLayout {
         preview.setClipToOutline(true);
         preview.setOutlineProvider(ViewOutlineProvider.BACKGROUND);
         preview.setImageBitmap(thumbnailFor(attachment, UiKit.dp(getContext(), 52)));
+        preview.setContentDescription("点击编辑图片");
+        preview.setOnClickListener(view -> ImageEditorDialog.show(getContext(), attachment,
+                edited -> {
+                    int index = pendingAttachments.indexOf(attachment);
+                    if (index >= 0) {
+                        pendingAttachments.set(index, edited);
+                        refreshAttachmentStrip();
+                    }
+                }));
         FrameLayout.LayoutParams previewParams = new FrameLayout.LayoutParams(
                 UiKit.dp(getContext(), 52), UiKit.dp(getContext(), 52));
         previewParams.gravity = Gravity.CENTER_HORIZONTAL | Gravity.TOP;
@@ -913,7 +922,8 @@ public final class ChatScreen extends LinearLayout {
         if (attachButton == null) {
             return;
         }
-        attachButton.setText(value ? "处理中" : "图片");
+        attachButton.setText("");
+        attachButton.setContentDescription(value ? "正在处理图片" : "添加图片");
         attachButton.setEnabled(!value && !sending && !host.getProviders().isEmpty());
     }
 

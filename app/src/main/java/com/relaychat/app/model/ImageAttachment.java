@@ -46,4 +46,8 @@ public final class ImageAttachment {
         }
         return dataUrlCache;
     }
+
+    public ImageAttachment copyWithData(String newMimeType, byte[] newData) {
+        return new ImageAttachment(newMimeType, newData);
+    }
 }
