@@ -38,7 +38,7 @@ public final class UiKit {
     public enum Icon {
         MENU, USERS, GEAR, REFRESH, IMAGE, SEND, CHAT,
         CHEVRON_DOWN, CHEVRON_UP, TRIANGLE_DOWN, TRIANGLE_UP,
-        CLOSE, PENCIL, ERASER, UNDO, REDO, TRASH, ROTATE_LEFT, ROTATE_RIGHT
+        CLOSE, PENCIL, COMPOSE, ERASER, UNDO, REDO, TRASH, ROTATE_LEFT, ROTATE_RIGHT
     }
 
     private UiKit() {
@@ -403,6 +403,30 @@ public final class UiKit {
                     path.close();
                     canvas.drawPath(path, paint);
                     canvas.drawLine(5 * unit, 18 * unit, 5 * unit, 15.5f * unit, paint);
+                    break;
+                case COMPOSE:
+                    path.reset();
+                    path.moveTo(10 * unit, 4 * unit);
+                    path.lineTo(7 * unit, 4 * unit);
+                    path.cubicTo(4.8f * unit, 4 * unit, 3 * unit, 5.8f * unit,
+                            3 * unit, 8 * unit);
+                    path.lineTo(3 * unit, 17 * unit);
+                    path.cubicTo(3 * unit, 19.2f * unit, 4.8f * unit, 21 * unit,
+                            7 * unit, 21 * unit);
+                    path.lineTo(16 * unit, 21 * unit);
+                    path.cubicTo(18.2f * unit, 21 * unit, 20 * unit, 19.2f * unit,
+                            20 * unit, 17 * unit);
+                    path.lineTo(20 * unit, 14 * unit);
+                    canvas.drawPath(path, paint);
+                    path.reset();
+                    path.moveTo(9 * unit, 15 * unit);
+                    path.lineTo(8 * unit, 18 * unit);
+                    path.lineTo(11 * unit, 17 * unit);
+                    path.lineTo(21 * unit, 7 * unit);
+                    path.cubicTo(22.5f * unit, 5.5f * unit, 19.5f * unit, 2.5f * unit,
+                            18 * unit, 4 * unit);
+                    path.close();
+                    canvas.drawPath(path, paint);
                     break;
                 case ERASER:
                     path.reset();

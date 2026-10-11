@@ -18,6 +18,7 @@ RelayChat is a small Android client for OpenAI-compatible API relays. It support
 - Attach up to four images to a message with the image button; they are sent to vision-capable models.
 - Edit attached images before sending: draw red marks, erase marks, undo/redo, clear marks, and rotate clockwise.
 - Keep several conversations, rename them, and switch between them from the `会话` button.
+- Start a fresh conversation directly with the square-pencil icon beside the chat title.
 - Save conversations and their images in app-private storage, so chats survive restarts.
 - Store API keys encrypted with Android Keystore AES-GCM.
 
@@ -41,8 +42,8 @@ The Android version is defined once in `version.properties`, and both Gradle and
 `build-apk.ps1` use that file:
 
 ```properties
-versionCode=3
-versionName=1.0.2
+versionCode=4
+versionName=1.0.3
 ```
 
 For every installable update, increase `versionCode`; change `versionName` when
@@ -132,9 +133,15 @@ fixtures without a relay or API key and saves stage screenshots under `build/pro
 
 ## Conversations
 
-Use the `会话` button in the chat header to open the conversation list. `新建` starts a fresh conversation, `打开` switches to another one, `重命名` gives a conversation a name of its own, and `删除` removes one after a confirmation. The header shows the title of the active conversation, which is derived from its first user message until it is given a name in the list. Saving an empty name clears the custom name and restores the automatic title. Switching is blocked while a reply is streaming.
+Use the `会话` button in the chat header to open the conversation list. Empty conversations are not shown or saved; the current blank conversation remains only as the input buffer for a new message. Each row shows only its title, message count and an active-conversation badge. Tap a row to open it, or long-press it to show a preview and the `打开`, `重命名` and `删除` menu. The active conversation shows a disabled `当前对话` action instead of `打开`. Tap outside the menu or press Back to dismiss it. `新建` starts a fresh conversation, `重命名` gives a conversation a name of its own, and `删除` removes one after a confirmation. The header shows the title of the active conversation, which is derived from its first user message until it is given a name in the list. Saving an empty name clears the custom name and restores the automatic title. Switching is blocked while a reply is streaming.
 
-Conversations are saved to the app's private files directory on every message, conversation switch and app stop, and are restored on the next launch. They are removed only when the app is uninstalled or its data is cleared. The metadata lives in `conversations.json` and each image is written as a separate file under `images/`, so appending a message never rewrites the image payloads.
+To verify the compact list and long-press actions on a disposable emulator, run `assembleDebug`,
+then `.\tests\conversations\run-tests.ps1 -Serial emulator-5556`. The instrumentation checks taps,
+long-presses, scrolling, menu dismissal, renaming, delete confirmation, bottom-row placement,
+the quick-create icon, empty-conversation reuse, the streaming guard and header layout,
+and saves screenshots under `build/conversation-tests/`.
+
+Conversations are saved to the app's private files directory on every message, conversation switch and app stop, and are restored on the next launch. Empty conversations are discarded during cleanup. The metadata lives in `conversations.json` and each image is written as a separate file under `images/`, so appending a message never rewrites the image payloads.
 
 Replies run in a foreground service independently of the chat screen. Returning home, closing the
 chat Activity, or removing the task from Recents does not cancel a reply. A low-priority notification

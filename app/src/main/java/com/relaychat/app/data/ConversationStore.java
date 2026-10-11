@@ -62,7 +62,9 @@ public final class ConversationStore {
                             }
                         }
                     }
-                    state.conversations.add(conversation);
+                    if (conversation.hasMessages()) {
+                        state.conversations.add(conversation);
+                    }
                 }
             }
             state.activeId = root.optString("active", "");
@@ -79,6 +81,9 @@ public final class ConversationStore {
         JSONArray array = new JSONArray();
         try {
             for (Conversation conversation : conversations) {
+                if (!conversation.hasMessages()) {
+                    continue;
+                }
                 JSONObject item = new JSONObject();
                 item.put("id", conversation.getId());
                 item.put("title", conversation.getCustomTitle());
@@ -127,7 +132,14 @@ public final class ConversationStore {
             }
             JSONObject root = new JSONObject();
             root.put("version", VERSION);
-            root.put("active", activeId == null ? "" : activeId);
+            String savedActiveId = "";
+            for (Conversation conversation : conversations) {
+                if (conversation.hasMessages() && conversation.getId().equals(activeId)) {
+                    savedActiveId = activeId;
+                    break;
+                }
+            }
+            root.put("active", savedActiveId);
             root.put("conversations", array);
             payload.json = root.toString();
         } catch (Exception error) {

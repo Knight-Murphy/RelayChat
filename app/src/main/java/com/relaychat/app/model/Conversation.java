@@ -28,6 +28,15 @@ public final class Conversation {
         return messages;
     }
 
+    public boolean hasMessages() {
+        for (ChatMessage message : messages) {
+            if (!ChatMessage.ROLE_NOTICE.equals(message.getRole())) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     /** The user-defined name, or an empty string while the automatic title is used. */
     public String getCustomTitle() {
         return customTitle;

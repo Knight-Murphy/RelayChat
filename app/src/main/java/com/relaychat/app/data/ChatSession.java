@@ -282,6 +282,15 @@ public final class ChatSession {
         persist(null);
     }
 
+    private void pruneEmptyConversations() {
+        for (int index = conversations.size() - 1; index >= 0; index--) {
+            Conversation conversation = conversations.get(index);
+            if (!conversation.hasMessages() && !conversation.getId().equals(activeId)) {
+                conversations.remove(index);
+            }
+        }
+    }
+
     private void scheduleCheckpoint() {
         if (!checkpointScheduled) {
             checkpointScheduled = true;
@@ -290,6 +299,7 @@ public final class ChatSession {
     }
 
     private void persist(Runnable afterWrite) {
+        pruneEmptyConversations();
         ConversationStore.Payload payload = store.encode(conversations, activeId);
         storage.execute(() -> {
             store.write(payload);

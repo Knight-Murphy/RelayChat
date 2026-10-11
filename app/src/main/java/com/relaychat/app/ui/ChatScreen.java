@@ -1,10 +1,13 @@
 package com.relaychat.app.ui;
 
 import android.content.Context;
+import android.content.res.ColorStateList;
 import android.graphics.Bitmap;
 import android.graphics.BitmapFactory;
 import android.graphics.Typeface;
+import android.graphics.drawable.RippleDrawable;
 import android.net.Uri;
+import android.os.Build;
 import android.text.TextUtils;
 import android.util.LruCache;
 import android.view.Gravity;
@@ -210,14 +213,58 @@ public final class ChatScreen extends LinearLayout {
     }
 
     private View buildHeader() {
-        LinearLayout header = UiKit.horizontal(getContext());
+        TextView title = UiKit.heading(getContext(), "RelayChat", 22);
+        title.setSingleLine(true);
+        title.setEllipsize(TextUtils.TruncateAt.END);
+        Button conversations = UiKit.button(getContext(), "会话", false);
+        UiKit.setIcon(conversations, UiKit.Icon.USERS, getContext());
+        conversations.setContentDescription("会话");
+        Button settings = UiKit.button(getContext(), "设置", false);
+        UiKit.setIcon(settings, UiKit.Icon.GEAR, getContext());
+        settings.setContentDescription("设置");
+        if (Build.VERSION.SDK_INT >= 26) {
+            conversations.setTooltipText("会话");
+            settings.setTooltipText("设置");
+        }
+
+        LinearLayout header = new LinearLayout(getContext()) {
+            @Override
+            protected void onMeasure(int widthMeasureSpec, int heightMeasureSpec) {
+                // Hide action labels only when keeping them would squeeze the brand or new-chat icon.
+                int requiredWidth = getPaddingLeft() + getPaddingRight()
+                        + UiKit.dp(getContext(), 44 + 8 + 12)
+                        + (int) Math.ceil(title.getPaint().measureText("RelayChat"));
+                for (Button button : new Button[]{conversations, settings}) {
+                    String label = button == conversations ? "会话" : "设置";
+                    requiredWidth += Math.max(button.getMinWidth(),
+                            (int) Math.ceil(button.getPaint().measureText(label))
+                                    + UiKit.dp(getContext(), 32 + 22 + 8));
+                }
+                boolean compact = MeasureSpec.getMode(widthMeasureSpec) != MeasureSpec.UNSPECIFIED
+                        && requiredWidth > MeasureSpec.getSize(widthMeasureSpec);
+                for (Button button : new Button[]{conversations, settings}) {
+                    String label = compact ? "" : button == conversations ? "会话" : "设置";
+                    if (!button.getText().toString().equals(label)) {
+                        button.setText(label);
+                    }
+                    int padding = UiKit.dp(getContext(), compact ? 13 : 16);
+                    button.setPadding(padding, UiKit.dp(getContext(), 8),
+                            padding, UiKit.dp(getContext(), 8));
+                    button.setCompoundDrawablePadding(UiKit.dp(getContext(), compact ? 0 : 8));
+                    button.getLayoutParams().width = compact ? UiKit.dp(getContext(), 48)
+                            : ViewGroup.LayoutParams.WRAP_CONTENT;
+                }
+                super.onMeasure(widthMeasureSpec, heightMeasureSpec);
+            }
+        };
+        header.setOrientation(HORIZONTAL);
+        header.setGravity(Gravity.CENTER_VERTICAL);
         header.setPadding(UiKit.dp(getContext(), 18), UiKit.dp(getContext(), 9),
                 UiKit.dp(getContext(), 18), UiKit.dp(getContext(), 9));
         header.setBackgroundColor(UiKit.SURFACE);
         header.setMinimumHeight(UiKit.dp(getContext(), 70));
 
         LinearLayout titles = UiKit.vertical(getContext());
-        TextView title = UiKit.heading(getContext(), "RelayChat", 22);
         TextView subtitle = UiKit.text(getContext(), "", 1, UiKit.MUTED);
         subtitle.setTag("header_subtitle");
         subtitle.setVisibility(View.GONE);
@@ -227,14 +274,29 @@ public final class ChatScreen extends LinearLayout {
         titles.addView(subtitle);
         header.addView(titles, titleParams);
 
-        Button conversations = UiKit.button(getContext(), "会话", false);
-        UiKit.setIcon(conversations, UiKit.Icon.USERS, getContext());
+        Button create = UiKit.iconButton(getContext(), UiKit.Icon.COMPOSE, false);
+        create.setTag("new_conversation_button");
+        create.setContentDescription("新建对话");
+        if (Build.VERSION.SDK_INT >= 26) {
+            create.setTooltipText("新建对话");
+        }
+        create.setMinWidth(0);
+        create.setMinimumWidth(0);
+        create.setPadding(UiKit.dp(getContext(), 11), 0, UiKit.dp(getContext(), 11), 0);
+        create.setCompoundDrawablePadding(0);
+        create.setBackground(new RippleDrawable(ColorStateList.valueOf(0x184F89E2), null,
+                UiKit.rounded(UiKit.SURFACE, UiKit.dp(getContext(), 8), 0, 0)));
+        create.setOnClickListener(view -> host.newConversation());
+        LinearLayout.LayoutParams createParams = new LinearLayout.LayoutParams(
+                UiKit.dp(getContext(), 44), UiKit.dp(getContext(), 48));
+        createParams.rightMargin = UiKit.dp(getContext(), 8);
+        header.addView(create, createParams);
+
         conversations.setTag("conversation_button");
         conversations.setOnClickListener(view -> host.showConversations());
         header.addView(conversations);
 
-        Button settings = UiKit.button(getContext(), "设置", false);
-        UiKit.setIcon(settings, UiKit.Icon.GEAR, getContext());
+        settings.setTag("settings_button");
         LinearLayout.LayoutParams settingsParams = new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
         settingsParams.leftMargin = UiKit.dp(getContext(), 12);
