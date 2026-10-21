@@ -16,6 +16,7 @@ import android.widget.AbsListView;
 import android.widget.ArrayAdapter;
 import android.widget.Button;
 import android.widget.EditText;
+import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.Spinner;
 import android.widget.TextView;
@@ -36,7 +37,7 @@ public final class UiKit {
     public static final int DANGER = Color.rgb(185, 28, 28);
 
     public enum Icon {
-        MENU, USERS, GEAR, REFRESH, IMAGE, SEND, CHAT,
+        MENU, USERS, GEAR, REFRESH, IMAGE, SEND, CHAT, PLUS,
         CHEVRON_DOWN, CHEVRON_UP, TRIANGLE_DOWN, TRIANGLE_UP,
         CLOSE, PENCIL, COMPOSE, ERASER, UNDO, REDO, TRASH, ROTATE_LEFT, ROTATE_RIGHT
     }
@@ -129,6 +130,13 @@ public final class UiKit {
         view.setGravity(Gravity.CENTER);
         view.setCompoundDrawablesRelative(
                 new IconDrawable(context, icon, color), null, null, null);
+        return view;
+    }
+
+    public static ImageView iconImage(Context context, Icon icon, int color) {
+        ImageView view = new ImageView(context);
+        view.setScaleType(ImageView.ScaleType.CENTER_INSIDE);
+        view.setImageDrawable(new IconDrawable(context, icon, color));
         return view;
     }
 
@@ -361,6 +369,10 @@ public final class UiKit {
                     canvas.drawCircle(8 * unit, 12 * unit, 1 * unit, paint);
                     canvas.drawCircle(12 * unit, 12 * unit, 1 * unit, paint);
                     canvas.drawCircle(16 * unit, 12 * unit, 1 * unit, paint);
+                    break;
+                case PLUS:
+                    canvas.drawLine(12 * unit, 5 * unit, 12 * unit, 19 * unit, paint);
+                    canvas.drawLine(5 * unit, 12 * unit, 19 * unit, 12 * unit, paint);
                     break;
                 case CHEVRON_DOWN:
                     canvas.drawLine(5 * unit, 9 * unit, 12 * unit, 16 * unit, paint);

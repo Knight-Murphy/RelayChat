@@ -19,6 +19,7 @@ import android.widget.AdapterView;
 import android.widget.Button;
 import android.widget.EditText;
 import android.widget.FrameLayout;
+import android.widget.HorizontalScrollView;
 import android.widget.ImageView;
 import android.widget.LinearLayout;
 import android.widget.ProgressBar;
@@ -37,7 +38,7 @@ import java.util.Collections;
 import java.util.List;
 
 public final class ChatScreen extends LinearLayout {
-    private static final int MAX_ATTACHMENTS = 4;
+    private static final int MAX_ATTACHMENTS = 20;
     private static final LruCache<String, Bitmap> THUMBNAILS =
             new LruCache<String, Bitmap>(8 * 1024 * 1024) {
                 @Override
@@ -69,6 +70,7 @@ public final class ChatScreen extends LinearLayout {
     private boolean loadingImages;
     private Button attachButton;
     private LinearLayout attachmentStrip;
+    private HorizontalScrollView attachmentScroller;
     private final List<ImageAttachment> pendingAttachments = new ArrayList<>();
     private MessageBubble activeAssistantBubble;
     private ChatMessage displayedReply;
@@ -480,7 +482,15 @@ public final class ChatScreen extends LinearLayout {
 
         attachmentStrip = UiKit.horizontal(getContext());
         attachmentStrip.setVisibility(View.GONE);
-        composer.addView(attachmentStrip, new LinearLayout.LayoutParams(
+        attachmentScroller = new HorizontalScrollView(getContext());
+        attachmentScroller.setHorizontalScrollBarEnabled(false);
+        attachmentScroller.setFillViewport(true);
+        attachmentScroller.setClipToPadding(false);
+        attachmentScroller.setPadding(0, UiKit.dp(getContext(), 4),
+                0, UiKit.dp(getContext(), 4));
+        attachmentScroller.addView(attachmentStrip, new HorizontalScrollView.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+        composer.addView(attachmentScroller, new LinearLayout.LayoutParams(
                 ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
 
         LinearLayout row = UiKit.horizontal(getContext());
@@ -838,37 +848,38 @@ public final class ChatScreen extends LinearLayout {
     }
 
     private void refreshAttachmentStrip() {
-        if (attachmentStrip == null) {
+        if (attachmentStrip == null || attachmentScroller == null) {
             return;
         }
         attachmentStrip.removeAllViews();
         if (pendingAttachments.isEmpty()) {
             attachmentStrip.setVisibility(View.GONE);
+            attachmentScroller.setVisibility(View.GONE);
             return;
         }
+        attachmentScroller.setVisibility(View.VISIBLE);
         attachmentStrip.setVisibility(View.VISIBLE);
         for (ImageAttachment attachment : pendingAttachments) {
             attachmentStrip.addView(buildAttachmentChip(attachment));
+        }
+        if (pendingAttachments.size() < MAX_ATTACHMENTS) {
+            attachmentStrip.addView(buildAddAttachmentTile());
         }
     }
 
     private View buildAttachmentChip(ImageAttachment attachment) {
         FrameLayout chip = new FrameLayout(getContext());
         LinearLayout.LayoutParams chipParams = new LinearLayout.LayoutParams(
-                UiKit.dp(getContext(), 62), UiKit.dp(getContext(), 60));
-        chipParams.bottomMargin = UiKit.dp(getContext(), 6);
-        chipParams.rightMargin = UiKit.dp(getContext(), 4);
+                UiKit.dp(getContext(), 88), UiKit.dp(getContext(), 88));
+        chipParams.rightMargin = UiKit.dp(getContext(), 8);
         chip.setLayoutParams(chipParams);
-
-        ImageView preview = new ImageView(getContext());
-        preview.setScaleType(ImageView.ScaleType.CENTER_CROP);
-        preview.setBackground(UiKit.rounded(UiKit.FIELD, UiKit.dp(getContext(), 6),
+        chip.setBackground(UiKit.rounded(UiKit.SURFACE, UiKit.dp(getContext(), 8),
                 UiKit.BORDER, UiKit.dp(getContext(), 1)));
-        preview.setClipToOutline(true);
-        preview.setOutlineProvider(ViewOutlineProvider.BACKGROUND);
-        preview.setImageBitmap(thumbnailFor(attachment, UiKit.dp(getContext(), 52)));
-        preview.setContentDescription("点击编辑图片");
-        preview.setOnClickListener(view -> ImageEditorDialog.show(getContext(), attachment,
+        chip.setClipToOutline(true);
+        chip.setOutlineProvider(ViewOutlineProvider.BACKGROUND);
+        chip.setElevation(UiKit.dp(getContext(), 1));
+        chip.setContentDescription("点击编辑图片");
+        chip.setOnClickListener(view -> ImageEditorDialog.show(getContext(), attachment,
                 edited -> {
                     int index = pendingAttachments.indexOf(attachment);
                     if (index >= 0) {
@@ -876,25 +887,57 @@ public final class ChatScreen extends LinearLayout {
                         refreshAttachmentStrip();
                     }
                 }));
+
+        ImageView preview = new ImageView(getContext());
+        preview.setScaleType(ImageView.ScaleType.CENTER_CROP);
+        preview.setImageBitmap(thumbnailFor(attachment, UiKit.dp(getContext(), 88)));
         FrameLayout.LayoutParams previewParams = new FrameLayout.LayoutParams(
-                UiKit.dp(getContext(), 52), UiKit.dp(getContext(), 52));
-        previewParams.gravity = Gravity.CENTER_HORIZONTAL | Gravity.TOP;
+                ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.MATCH_PARENT);
         chip.addView(preview, previewParams);
+
+        FrameLayout removeButton = new FrameLayout(getContext());
+        removeButton.setContentDescription("移除图片");
+        removeButton.setOnClickListener(view -> {
+            pendingAttachments.remove(attachment);
+            refreshAttachmentStrip();
+        });
+        FrameLayout.LayoutParams removeButtonParams = new FrameLayout.LayoutParams(
+                UiKit.dp(getContext(), 36), UiKit.dp(getContext(), 36));
+        removeButtonParams.gravity = Gravity.END | Gravity.TOP;
+        chip.addView(removeButton, removeButtonParams);
 
         TextView remove = UiKit.text(getContext(), "×", 13, android.graphics.Color.WHITE);
         remove.setTypeface(Typeface.DEFAULT, Typeface.BOLD);
         remove.setGravity(Gravity.CENTER);
-        remove.setBackground(UiKit.rounded(UiKit.WARM, UiKit.dp(getContext(), 10),
-                UiKit.WARM, 0));
-        remove.setOnClickListener(view -> {
-            pendingAttachments.remove(attachment);
-            refreshAttachmentStrip();
-        });
+        remove.setImportantForAccessibility(View.IMPORTANT_FOR_ACCESSIBILITY_NO);
+        remove.setBackground(UiKit.rounded(0xD96F7378, UiKit.dp(getContext(), 12),
+                android.graphics.Color.WHITE, UiKit.dp(getContext(), 1)));
         FrameLayout.LayoutParams removeParams = new FrameLayout.LayoutParams(
-                UiKit.dp(getContext(), 20), UiKit.dp(getContext(), 20));
-        removeParams.gravity = Gravity.END | Gravity.TOP;
-        chip.addView(remove, removeParams);
+                UiKit.dp(getContext(), 24), UiKit.dp(getContext(), 24));
+        removeParams.gravity = Gravity.CENTER;
+        removeButton.addView(remove, removeParams);
         return chip;
+    }
+
+    private View buildAddAttachmentTile() {
+        FrameLayout tile = new FrameLayout(getContext());
+        LinearLayout.LayoutParams tileParams = new LinearLayout.LayoutParams(
+                UiKit.dp(getContext(), 88), UiKit.dp(getContext(), 88));
+        tileParams.rightMargin = UiKit.dp(getContext(), 8);
+        tile.setLayoutParams(tileParams);
+        tile.setBackground(UiKit.rounded(UiKit.FIELD, UiKit.dp(getContext(), 8),
+                UiKit.BORDER, UiKit.dp(getContext(), 1)));
+        tile.setClipToOutline(true);
+        tile.setOutlineProvider(ViewOutlineProvider.BACKGROUND);
+        tile.setContentDescription("添加图片");
+        tile.setOnClickListener(view -> host.pickImages());
+
+        ImageView plus = UiKit.iconImage(getContext(), UiKit.Icon.PLUS, UiKit.MUTED);
+        FrameLayout.LayoutParams plusParams = new FrameLayout.LayoutParams(
+                UiKit.dp(getContext(), 22), UiKit.dp(getContext(), 22));
+        plusParams.gravity = Gravity.CENTER;
+        tile.addView(plus, plusParams);
+        return tile;
     }
 
     private Bitmap thumbnailFor(ImageAttachment attachment, int targetSize) {

@@ -15,7 +15,7 @@ RelayChat is a small Android client for OpenAI-compatible API relays. It support
 - Render replies with formatting: headings, lists, quotes, tables, code blocks, bold/italic text and LaTeX math.
 - Stop an in-progress response.
 - Keep generating replies in a foreground service after leaving the app, and notify when a reply is saved.
-- Attach up to four images to a message with the image button; they are sent to vision-capable models.
+- Attach up to 20 images to a message with the image button; they are sent to vision-capable models.
 - Edit attached images before sending: draw red marks, erase marks, undo/redo, clear marks, and rotate clockwise.
 - Keep several conversations, rename them, and switch between them from the `会话` button.
 - Start a fresh conversation directly with the square-pencil icon beside the chat title.
@@ -36,14 +36,24 @@ With an existing Android SDK, build an APK directly:
 
 The signed debug APK is written to `dist\RelayChat-debug.apk`.
 
+To build a separate test APK that can be installed alongside the existing app, run:
+
+```powershell
+.\build-apk.ps1 -SdkRoot "D:\Android\Sdk" -TestBuild
+```
+
+This writes `dist\RelayChat-test.apk` with application ID `com.relaychat.app.debug`
+and the launcher name `RelayChat Test`. The Android Studio `debug` variant uses the
+same application ID, so `assembleDebug` and Run install a separate test app too.
+
 ### Versioning
 
 The Android version is defined once in `version.properties`, and both Gradle and
 `build-apk.ps1` use that file:
 
 ```properties
-versionCode=4
-versionName=1.0.3
+versionCode=5
+versionName=1.0.4
 ```
 
 For every installable update, increase `versionCode`; change `versionName` when
@@ -59,6 +69,10 @@ Enable installation from unknown sources for the file manager or browser you use
 dist\RelayChat-debug.apk
 ```
 
+The normal APK keeps the existing `com.relaychat.app` application ID. To test without
+replacing the installed app, install `dist\RelayChat-test.apk` instead. The test app has
+its own private storage, so it starts with an empty configuration and conversation list.
+
 The debug certificate is for local testing. Use a private release keystore before distributing the app.
 
 ## Provider setup
@@ -73,7 +87,7 @@ Only HTTPS API roots are accepted. A relay can see prompts and responses, so onl
 
 ## Images
 
-Use the image button beside the composer to pick one or more images from the system picker. A picked image is rotated by its EXIF orientation, scaled so its longest edge is at most 1536 px, and compressed to PNG or JPEG. The compressed bytes are sent as base64 data URLs inside the request: `image_url` parts for Chat Completions and `input_image` parts for the Responses API. The relay and the selected model must accept image input, otherwise the API returns an error. Compressed images are stored in the app's private files directory, so they return with their conversation on the next launch and are deleted together with it.
+Use the image button beside the composer to pick up to 20 images from the system picker. A picked image is rotated by its EXIF orientation, scaled so its longest edge is at most 1536 px, and compressed to PNG or JPEG. The compressed bytes are sent as base64 data URLs inside the request: `image_url` parts for Chat Completions and `input_image` parts for the Responses API. The relay and the selected model must accept image input, otherwise the API returns an error. Compressed images are stored in the app's private files directory, so they return with their conversation on the next launch and are deleted together with it.
 
 Tap an attachment thumbnail before sending to open the image editor. Draw red marks, erase
 marks, undo or redo mark changes, clear all marks, or rotate the image clockwise by 90 degrees.

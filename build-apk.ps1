@@ -1,5 +1,6 @@
 param(
-    [string]$SdkRoot = $(if ($env:ANDROID_SDK_ROOT) { $env:ANDROID_SDK_ROOT } else { "D:\Android\Sdk" })
+    [string]$SdkRoot = $(if ($env:ANDROID_SDK_ROOT) { $env:ANDROID_SDK_ROOT } else { "D:\Android\Sdk" }),
+    [switch]$TestBuild
 )
 
 $ErrorActionPreference = "Stop"
@@ -38,6 +39,9 @@ try {
     if ([string]::IsNullOrWhiteSpace($versionName)) {
         throw "version.properties versionName must not be empty"
     }
+    $applicationId = if ($TestBuild) { "com.relaychat.app.debug" } else { "com.relaychat.app" }
+    $buildVersionName = if ($TestBuild) { "$versionName-test" } else { $versionName }
+    $appLabel = if ($TestBuild) { "RelayChat Test" } else { "@string/app_name" }
 
     $buildTools = Get-ChildItem (Join-Path $SdkRoot "build-tools") -Directory |
         Where-Object { $_.Name -match "^\d+\.\d+\.\d+" -and (Test-Path (Join-Path $_.FullName "aapt2.exe")) } |
@@ -81,7 +85,21 @@ try {
     $manifest = Get-Content -Raw (Join-Path $root "app\src\main\AndroidManifest.xml")
     $manifest = $manifest.Replace(
         '<manifest xmlns:android=',
-        '<manifest package="com.relaychat.app" xmlns:android=')
+        '<manifest package="' + $applicationId + '" xmlns:android=')
+    $manifest = $manifest.Replace(
+        'android:label="@string/app_name"',
+        'android:label="' + $appLabel + '"')
+    if ($TestBuild) {
+        $manifest = $manifest.Replace(
+            'android:name=".ChatApplication"',
+            'android:name="com.relaychat.app.ChatApplication"')
+        $manifest = $manifest.Replace(
+            'android:name=".ReplyService"',
+            'android:name="com.relaychat.app.ReplyService"')
+        $manifest = $manifest.Replace(
+            'android:name=".MainActivity"',
+            'android:name="com.relaychat.app.MainActivity"')
+    }
     [System.IO.File]::WriteAllText(
         (Join-Path $build "AndroidManifest.xml"),
         $manifest,
@@ -98,8 +116,9 @@ try {
         --min-sdk-version 23 `
         --target-sdk-version 36 `
         --version-code $versionCode `
-        --version-name $versionName `
+        --version-name $buildVersionName `
         --auto-add-overlay `
+        --custom-package com.relaychat.app `
         -R (Join-Path $build "res.zip")
     if ($LASTEXITCODE -ne 0) { throw "aapt2 link failed" }
 
@@ -109,7 +128,7 @@ try {
 package com.relaychat.app;
 
 public final class BuildConfig {
-    public static final String VERSION_NAME = "$versionName";
+    public static final String VERSION_NAME = "$buildVersionName";
 
     private BuildConfig() {
     }
@@ -151,7 +170,8 @@ public final class BuildConfig {
 
     New-Item -ItemType Directory -Force $dist | Out-Null
     Get-ChildItem $dist -Filter "*.idsig" -ErrorAction SilentlyContinue | Remove-Item -Force
-    $apk = Join-Path $dist "RelayChat-debug.apk"
+    $apkName = if ($TestBuild) { "RelayChat-test.apk" } else { "RelayChat-debug.apk" }
+    $apk = Join-Path $dist $apkName
     & $apksigner sign --ks $debugKeyStore --ks-key-alias androiddebugkey `
         --ks-pass pass:android --key-pass pass:android --v4-signing-enabled false `
         --out $apk (Join-Path $build "aligned.apk")
@@ -160,6 +180,7 @@ public final class BuildConfig {
     if ($LASTEXITCODE -ne 0) { throw "APK verification failed" }
 
     Write-Host "Built: $apk"
+    Write-Host "Application ID: $applicationId"
 } finally {
     Pop-Location
 }
