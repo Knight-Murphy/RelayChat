@@ -2,6 +2,8 @@
 
 RelayChat is a small Android client for OpenAI-compatible API relays. It supports multiple providers, model discovery, model switching, Chat Completions, Responses, streaming replies, and encrypted local API key storage.
 
+[**Download the latest APK**](https://github.com/Knight-Murphy/RelayChat/releases/latest/download/RelayChat-latest.apk)
+
 ## Features
 
 - Add multiple OpenAI-compatible providers.
@@ -74,6 +76,23 @@ replacing the installed app, install `dist\RelayChat-test.apk` instead. The test
 its own private storage, so it starts with an empty configuration and conversation list.
 
 The debug certificate is for local testing. Use a private release keystore before distributing the app.
+
+### Automatic APK releases
+
+Pushing to `main` runs `.github/workflows/release-apk.yml`. The workflow builds the APK,
+creates or updates the GitHub Release for the version in `version.properties`, and attaches
+both a versioned APK and `RelayChat-latest.apk`. The README download link always points to the
+latest release.
+
+The workflow expects four repository Actions secrets:
+
+- `ANDROID_KEYSTORE_BASE64`
+- `ANDROID_KEYSTORE_PASSWORD`
+- `ANDROID_KEY_ALIAS`
+- `ANDROID_KEY_PASSWORD`
+
+Use the same signing key across releases so installed copies can be updated in place. Without
+these secrets the workflow stops before publishing instead of producing an incompatible APK.
 
 ## Provider setup
 

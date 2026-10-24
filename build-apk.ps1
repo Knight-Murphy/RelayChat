@@ -77,6 +77,21 @@ try {
     Require-Path $jar "jar"
     Require-Path $keytool "keytool"
 
+    $configuredSigning = @(
+        [string]$env:RELAYCHAT_KEYSTORE_PATH,
+        [string]$env:RELAYCHAT_KEYSTORE_PASSWORD,
+        [string]$env:RELAYCHAT_KEY_ALIAS,
+        [string]$env:RELAYCHAT_KEY_PASSWORD
+    )
+    $hasConfiguredSigning = $configuredSigning | Where-Object {
+        -not [string]::IsNullOrWhiteSpace($_)
+    }
+    if ($hasConfiguredSigning -and ($configuredSigning | Where-Object {
+        [string]::IsNullOrWhiteSpace($_)
+    })) {
+        throw "All RELAYCHAT_KEYSTORE_* signing settings must be provided together"
+    }
+
     if (Test-Path -LiteralPath $build) {
         Remove-Item -LiteralPath $build -Recurse -Force
     }
@@ -155,25 +170,39 @@ public final class BuildConfig {
     & $zipalign -f -p 4 (Join-Path $build "unsigned.apk") (Join-Path $build "aligned.apk")
     if ($LASTEXITCODE -ne 0) { throw "zipalign failed" }
 
-    $debugKeyStore = Join-Path $env:USERPROFILE ".android\debug.keystore"
-    if (-not (Test-Path -LiteralPath $debugKeyStore)) {
-        $keystoreDirectory = Join-Path $root "keystore"
-        New-Item -ItemType Directory -Force $keystoreDirectory | Out-Null
-        $debugKeyStore = Join-Path $keystoreDirectory "debug.keystore"
+    if ($hasConfiguredSigning) {
+        $signingKeyStore = $env:RELAYCHAT_KEYSTORE_PATH
+        $signingKeyStorePassword = $env:RELAYCHAT_KEYSTORE_PASSWORD
+        $signingKeyAlias = $env:RELAYCHAT_KEY_ALIAS
+        $signingKeyPassword = $env:RELAYCHAT_KEY_PASSWORD
+    } else {
+        $signingKeyStore = Join-Path $env:USERPROFILE ".android\debug.keystore"
+        if (-not (Test-Path -LiteralPath $signingKeyStore)) {
+            $keystoreDirectory = Join-Path $root "keystore"
+            New-Item -ItemType Directory -Force $keystoreDirectory | Out-Null
+            $signingKeyStore = Join-Path $keystoreDirectory "debug.keystore"
+        }
+        if (-not (Test-Path -LiteralPath $signingKeyStore)) {
+            & $keytool -genkeypair -keystore $signingKeyStore -storepass android -keypass android `
+                -alias androiddebugkey -dname "CN=Android Debug,O=Android,C=US" `
+                -keyalg RSA -keysize 2048 -validity 10000
+            if ($LASTEXITCODE -ne 0) { throw "debug keystore generation failed" }
+        }
+        $signingKeyStorePassword = "android"
+        $signingKeyAlias = "androiddebugkey"
+        $signingKeyPassword = "android"
     }
-    if (-not (Test-Path -LiteralPath $debugKeyStore)) {
-        & $keytool -genkeypair -keystore $debugKeyStore -storepass android -keypass android `
-            -alias androiddebugkey -dname "CN=Android Debug,O=Android,C=US" `
-            -keyalg RSA -keysize 2048 -validity 10000
-        if ($LASTEXITCODE -ne 0) { throw "debug keystore generation failed" }
+    if (-not (Test-Path -LiteralPath $signingKeyStore)) {
+        throw "Signing keystore not found: $signingKeyStore"
     }
 
     New-Item -ItemType Directory -Force $dist | Out-Null
     Get-ChildItem $dist -Filter "*.idsig" -ErrorAction SilentlyContinue | Remove-Item -Force
     $apkName = if ($TestBuild) { "RelayChat-test.apk" } else { "RelayChat-debug.apk" }
     $apk = Join-Path $dist $apkName
-    & $apksigner sign --ks $debugKeyStore --ks-key-alias androiddebugkey `
-        --ks-pass pass:android --key-pass pass:android --v4-signing-enabled false `
+    & $apksigner sign --ks $signingKeyStore --ks-key-alias $signingKeyAlias `
+        --ks-pass "pass:$signingKeyStorePassword" --key-pass "pass:$signingKeyPassword" `
+        --v4-signing-enabled false `
         --out $apk (Join-Path $build "aligned.apk")
     if ($LASTEXITCODE -ne 0) { throw "apksigner failed" }
     & $apksigner verify --verbose $apk

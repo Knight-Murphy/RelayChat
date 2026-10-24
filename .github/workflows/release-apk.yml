@@ -1,0 +1,108 @@
+name: Publish latest APK
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: latest-apk-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    runs-on: windows-latest
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Set up Java
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - name: Read app version
+        id: version
+        shell: pwsh
+        run: |
+          $properties = @{}
+          Get-Content version.properties | ForEach-Object {
+            $line = $_.Trim()
+            if (-not $line -or $line.StartsWith("#")) {
+              return
+            }
+            $parts = $line.Split("=", 2)
+            if ($parts.Count -ne 2) {
+              throw "Invalid version.properties line: $line"
+            }
+            $properties[$parts[0].Trim()] = $parts[1].Trim()
+          }
+          "version_name=$($properties['versionName'])" >> $env:GITHUB_OUTPUT
+          "version_code=$($properties['versionCode'])" >> $env:GITHUB_OUTPUT
+
+      - name: Prepare signing key
+        shell: pwsh
+        env:
+          KEYSTORE_BASE64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: |
+          $required = @{
+            "ANDROID_KEYSTORE_BASE64" = $env:KEYSTORE_BASE64
+            "ANDROID_KEYSTORE_PASSWORD" = $env:KEYSTORE_PASSWORD
+            "ANDROID_KEY_ALIAS" = $env:KEY_ALIAS
+            "ANDROID_KEY_PASSWORD" = $env:KEY_PASSWORD
+          }
+          foreach ($item in $required.GetEnumerator()) {
+            if ([string]::IsNullOrWhiteSpace($item.Value)) {
+              throw "Missing repository secret: $($item.Key)"
+            }
+          }
+          $target = Join-Path $env:RUNNER_TEMP "relaychat-release.keystore"
+          [System.IO.File]::WriteAllBytes(
+            $target,
+            [Convert]::FromBase64String($env:KEYSTORE_BASE64))
+
+      - name: Build APK
+        shell: pwsh
+        env:
+          RELAYCHAT_KEYSTORE_PATH: ${{ runner.temp }}/relaychat-release.keystore
+          RELAYCHAT_KEYSTORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+          RELAYCHAT_KEY_ALIAS: ${{ secrets.ANDROID_KEY_ALIAS }}
+          RELAYCHAT_KEY_PASSWORD: ${{ secrets.ANDROID_KEY_PASSWORD }}
+        run: .\build-apk.ps1
+
+      - name: Prepare release assets
+        shell: pwsh
+        run: |
+          $version = "${{ steps.version.outputs.version_name }}"
+          Copy-Item dist\RelayChat-debug.apk "dist\RelayChat-$version.apk"
+          Copy-Item dist\RelayChat-debug.apk dist\RelayChat-latest.apk
+          $hash = (Get-FileHash "dist\RelayChat-$version.apk" -Algorithm SHA256).Hash.ToLowerInvariant()
+          "$hash  RelayChat-$version.apk" |
+            Set-Content "dist\RelayChat-$version.apk.sha256" -Encoding ascii
+
+      - name: Publish GitHub release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: v${{ steps.version.outputs.version_name }}
+          target_commitish: ${{ github.sha }}
+          name: RelayChat ${{ steps.version.outputs.version_name }}
+          body: |
+            RelayChat ${{ steps.version.outputs.version_name }} (versionCode ${{ steps.version.outputs.version_code }})
+
+            Download `RelayChat-latest.apk` below, or use the stable link:
+            https://github.com/${{ github.repository }}/releases/latest/download/RelayChat-latest.apk
+          files: |
+            dist/RelayChat-${{ steps.version.outputs.version_name }}.apk
+            dist/RelayChat-latest.apk
+            dist/RelayChat-${{ steps.version.outputs.version_name }}.apk.sha256
+          fail_on_unmatched_files: true
+          overwrite_files: true
+          make_latest: true
