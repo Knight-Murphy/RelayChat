@@ -7,6 +7,7 @@ import android.content.ContextWrapper;
 import android.content.Intent;
 import android.graphics.Bitmap;
 import android.os.Bundle;
+import android.text.format.DateFormat;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.TextView;
@@ -31,9 +32,13 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 import java.net.URLStreamHandler;
 import java.nio.charset.StandardCharsets;
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Calendar;
 import java.util.Collections;
+import java.util.Date;
 import java.util.List;
+import java.util.Locale;
 import java.util.concurrent.BlockingQueue;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.LinkedBlockingQueue;
@@ -255,6 +260,7 @@ public final class ProgressInstrumentation extends Instrumentation {
         ChatMessage completed = new ChatMessage(ChatMessage.ROLE_ASSISTANT, "保留正文");
         completed.setReasoning("保留摘要");
         completed.restoreDurations(4200, 1200);
+        completed.setCompletedAtMillis(1700000000000L);
         completed.setStage(ChatMessage.STAGE_COMPLETED);
         completed.restoreProcessingSteps(java.util.Arrays.asList(
                 new ChatMessage.ProcessingStep(ChatMessage.STAGE_WAITING, 0),
@@ -275,6 +281,8 @@ public final class ProgressInstrumentation extends Instrumentation {
         check("保留摘要".equals(loaded.get(0).getReasoning()), "Reasoning was not restored");
         check(loaded.get(0).getProcessingDurationMs() == 4200
                 && loaded.get(0).getReasoningDurationMs() == 1200, "Timing was not restored");
+        check(loaded.get(0).getCompletedAtMillis() == 1700000000000L,
+                "Completion time was not restored");
         check(loaded.get(0).getProcessingSteps().size() == 3
                 && loaded.get(0).getProcessingSteps().get(1).getStartedMs() == 2000,
                 "Processing timeline was not restored");
@@ -321,14 +329,36 @@ public final class ProgressInstrumentation extends Instrumentation {
         stream.finishGate.countDown();
         await(() -> text(activity).contains("回答完成"), "Completion status missing");
         check(!text(activity).contains("我会先理解"), "Completed reasoning was not collapsed");
+        ChatMessage saved = activity.getChatSession().getActiveConversation().getMessages().get(
+                activity.getChatSession().getActiveConversation().getMessages().size() - 1);
+        check(saved.getCompletedAtMillis() > 0, "Completion time was not recorded");
+        String expectedTime = expectedAnswerTime(activity, saved.getCompletedAtMillis());
+        TextView answerTime = findContentDescription(activity.getWindow().getDecorView(),
+                "回答完成时间");
+        check(answerTime != null && expectedTime.contentEquals(answerTime.getText()),
+                "Completion time was not rendered");
+        long previousReplyAt = System.currentTimeMillis() - TimeUnit.DAYS.toMillis(14);
+        saved.setCompletedAtMillis(previousReplyAt);
+        runOnMainSync(() -> {
+            try {
+                Field field = MainActivity.class.getDeclaredField("chatScreen");
+                field.setAccessible(true);
+                ((ChatScreen) field.get(activity)).onReplyChanged();
+            } catch (Exception error) {
+                throw new AssertionError(error);
+            }
+        });
+        String expectedDatedTime = expectedAnswerTime(activity, previousReplyAt);
+        answerTime = findContentDescription(activity.getWindow().getDecorView(),
+                "回答完成时间");
+        check(answerTime != null && expectedDatedTime.contentEquals(answerTime.getText()),
+                "Previous reply date was not rendered");
         runOnMainSync(() -> {
             View header = findExpandable(activity.getWindow().getDecorView());
             check(header != null && header.performClick(), "Cannot expand completed reasoning");
         });
         check(text(activity).contains("我会先理解"), "Expanded reasoning not visible");
         screenshot("completed");
-        ChatMessage saved = activity.getChatSession().getActiveConversation().getMessages().get(
-                activity.getChatSession().getActiveConversation().getMessages().size() - 1);
         check(saved.getProcessingDurationMs() >= 1200 && !saved.isPending(), "Completed duration invalid");
         long frozen = saved.getProcessingDurationMs();
         Thread.sleep(50);
@@ -417,6 +447,39 @@ public final class ProgressInstrumentation extends Instrumentation {
             ViewGroup group = (ViewGroup) view;
             for (int i = 0; i < group.getChildCount(); i++) {
                 View found = findExpandable(group.getChildAt(i));
+                if (found != null) return found;
+            }
+        }
+        return null;
+    }
+
+    private static String expectedAnswerTime(Context context, long completedAt) {
+        Date date = new Date(completedAt);
+        Calendar now = Calendar.getInstance();
+        Calendar completed = Calendar.getInstance();
+        completed.setTime(date);
+        String time = DateFormat.getTimeFormat(context).format(date);
+        if (now.get(Calendar.YEAR) == completed.get(Calendar.YEAR)
+                && now.get(Calendar.DAY_OF_YEAR) == completed.get(Calendar.DAY_OF_YEAR)) {
+            return time;
+        }
+        String skeleton = now.get(Calendar.YEAR) == completed.get(Calendar.YEAR)
+                ? "MMMd" : "yMMMd";
+        String pattern = DateFormat.getBestDateTimePattern(Locale.getDefault(), skeleton);
+        String dateText = new SimpleDateFormat(pattern, Locale.getDefault()).format(date);
+        return dateText + " " + time;
+    }
+
+    private static TextView findContentDescription(View view, String prefix) {
+        if (view.getVisibility() != View.VISIBLE) return null;
+        if (view instanceof TextView && view.getContentDescription() != null
+                && view.getContentDescription().toString().startsWith(prefix)) {
+            return (TextView) view;
+        }
+        if (view instanceof ViewGroup) {
+            ViewGroup group = (ViewGroup) view;
+            for (int i = 0; i < group.getChildCount(); i++) {
+                TextView found = findContentDescription(group.getChildAt(i), prefix);
                 if (found != null) return found;
             }
         }

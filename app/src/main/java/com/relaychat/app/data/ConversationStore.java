@@ -97,6 +97,9 @@ public final class ConversationStore {
                         encoded.put("processing_ms", message.getProcessingDurationMs());
                         encoded.put("reasoning_ms", message.getReasoningDurationMs());
                     }
+                    if (message.getCompletedAtMillis() > 0) {
+                        encoded.put("completed_at_ms", message.getCompletedAtMillis());
+                    }
                     if (!message.getReasoning().isEmpty()) {
                         encoded.put("reasoning", message.getReasoning());
                     }
@@ -207,6 +210,7 @@ public final class ConversationStore {
         parsed.setError(error);
         parsed.setReasoning(reasoning);
         parsed.restoreDurations(message.optLong("processing_ms", 0), message.optLong("reasoning_ms", 0));
+        parsed.setCompletedAtMillis(message.optLong("completed_at_ms", 0));
         List<ChatMessage.ProcessingStep> steps = new ArrayList<>();
         JSONArray savedSteps = message.optJSONArray("processing_steps");
         if (savedSteps != null) {

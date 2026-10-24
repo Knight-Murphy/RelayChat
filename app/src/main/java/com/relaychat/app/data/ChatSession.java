@@ -8,6 +8,7 @@ import android.os.Looper;
 
 import com.relaychat.app.ReplyService;
 import com.relaychat.app.model.ChatMessage;
+import com.relaychat.app.model.ContextUsage;
 import com.relaychat.app.model.Conversation;
 import com.relaychat.app.model.ProviderProfile;
 import com.relaychat.app.network.ApiClient;
@@ -134,8 +135,9 @@ public final class ChatSession {
                         message.getAttachments()));
             }
         }
-        if (snapshot.size() > 40) {
-            snapshot = new ArrayList<>(snapshot.subList(snapshot.size() - 40, snapshot.size()));
+        if (snapshot.size() > ContextUsage.MAX_MESSAGES) {
+            snapshot = new ArrayList<>(snapshot.subList(
+                    snapshot.size() - ContextUsage.MAX_MESSAGES, snapshot.size()));
         }
         ChatMessage assistant = new ChatMessage(ChatMessage.ROLE_ASSISTANT, "");
         assistant.setPending(true);

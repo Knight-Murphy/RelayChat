@@ -8,7 +8,9 @@ import android.graphics.Typeface;
 import android.graphics.drawable.RippleDrawable;
 import android.net.Uri;
 import android.os.Build;
+import android.text.Editable;
 import android.text.TextUtils;
+import android.text.TextWatcher;
 import android.util.LruCache;
 import android.view.Gravity;
 import android.view.View;
@@ -30,12 +32,17 @@ import android.widget.TextView;
 import com.relaychat.app.MainActivity;
 import com.relaychat.app.media.ImagePicker;
 import com.relaychat.app.model.ChatMessage;
+import com.relaychat.app.model.ContextUsage;
 import com.relaychat.app.model.ImageAttachment;
 import com.relaychat.app.model.ProviderProfile;
 
+import java.text.SimpleDateFormat;
 import java.util.ArrayList;
+import java.util.Calendar;
 import java.util.Collections;
+import java.util.Date;
 import java.util.List;
+import java.util.Locale;
 
 public final class ChatScreen extends LinearLayout {
     private static final int MAX_ATTACHMENTS = 20;
@@ -61,6 +68,7 @@ public final class ChatScreen extends LinearLayout {
     private final TextView headerSubtitle;
     private LinearLayout selectorDetails;
     private TextView selectorSummary;
+    private TextView contextLabel;
     private Button selectorToggle;
     private boolean selectorExpanded;
 
@@ -133,6 +141,20 @@ public final class ChatScreen extends LinearLayout {
                 return true;
             }
             return false;
+        });
+        input.addTextChangedListener(new TextWatcher() {
+            @Override
+            public void beforeTextChanged(CharSequence text, int start, int count, int after) {
+            }
+
+            @Override
+            public void onTextChanged(CharSequence text, int start, int before, int count) {
+            }
+
+            @Override
+            public void afterTextChanged(Editable text) {
+                updateContextLabel();
+            }
         });
 
         sendButton = UiKit.button(context, "发送", true);
@@ -318,9 +340,15 @@ public final class ChatScreen extends LinearLayout {
         selectorSummary = UiKit.text(getContext(), "未配置服务商 · 未选择模型", 13, UiKit.MUTED);
         selectorSummary.setSingleLine(true);
         selectorSummary.setEllipsize(TextUtils.TruncateAt.END);
-        selectorSummary.setMaxWidth(UiKit.dp(getContext(), 260));
         summaryRow.addView(selectorSummary, new LinearLayout.LayoutParams(
-                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT));
+                0, ViewGroup.LayoutParams.WRAP_CONTENT, 1f));
+        contextLabel = UiKit.text(getContext(), "上下文 ~0", 11, UiKit.MUTED);
+        contextLabel.setSingleLine(true);
+        contextLabel.setGravity(Gravity.CENTER_VERTICAL);
+        LinearLayout.LayoutParams contextParams = new LinearLayout.LayoutParams(
+                ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+        contextParams.leftMargin = UiKit.dp(getContext(), 6);
+        summaryRow.addView(contextLabel, contextParams);
         selectorToggle = UiKit.iconButton(getContext(), UiKit.Icon.TRIANGLE_DOWN, false);
         selectorToggle.setContentDescription("展开服务商和模型选择");
         selectorToggle.setBackground(null);
@@ -466,11 +494,31 @@ public final class ChatScreen extends LinearLayout {
         ProviderProfile provider = host.getSelectedProvider();
         if (provider == null) {
             selectorSummary.setText("未配置服务商 · 未选择模型");
+            updateContextLabel();
             return;
         }
         String model = provider.getSelectedModel().isEmpty()
                 ? "未选择模型" : provider.getSelectedModel();
         selectorSummary.setText(provider.getName() + " · " + model);
+        updateContextLabel();
+    }
+
+    private void updateContextLabel() {
+        if (contextLabel == null) {
+            return;
+        }
+        List<ChatMessage> context = new ArrayList<>(host.getHistory());
+        if (!sending) {
+            String draft = input.getText().toString().trim();
+            if (!draft.isEmpty() || !pendingAttachments.isEmpty()) {
+                context.add(new ChatMessage(ChatMessage.ROLE_USER, draft,
+                        new ArrayList<>(pendingAttachments)));
+            }
+        }
+        int tokens = ContextUsage.estimate(host.getSelectedProvider(), context);
+        contextLabel.setText("上下文 ~" + ContextUsage.format(tokens));
+        contextLabel.setContentDescription("当前上下文约 " + tokens
+                + " tokens，按实际发送内容估算");
     }
 
     private View buildComposer() {
@@ -619,6 +667,7 @@ public final class ChatScreen extends LinearLayout {
         } else {
             renderStreamingText();
         }
+        updateContextLabel();
         scheduleProgressTick();
         if (sending != running) {
             setSending(running);
@@ -697,6 +746,7 @@ public final class ChatScreen extends LinearLayout {
         headerSubtitle.setText(host.getActiveConversation().getTitle());
         if (host.getHistory().isEmpty()) {
             messagesContainer.addView(buildEmptyState());
+            updateContextLabel();
             return;
         }
         for (ChatMessage message : host.getHistory()) {
@@ -711,6 +761,7 @@ public final class ChatScreen extends LinearLayout {
                 }
             }
         }
+        updateContextLabel();
         scheduleProgressTick();
         scrollToBottom();
     }
@@ -855,6 +906,7 @@ public final class ChatScreen extends LinearLayout {
         if (pendingAttachments.isEmpty()) {
             attachmentStrip.setVisibility(View.GONE);
             attachmentScroller.setVisibility(View.GONE);
+            updateContextLabel();
             return;
         }
         attachmentScroller.setVisibility(View.VISIBLE);
@@ -865,6 +917,7 @@ public final class ChatScreen extends LinearLayout {
         if (pendingAttachments.size() < MAX_ATTACHMENTS) {
             attachmentStrip.addView(buildAddAttachmentTile());
         }
+        updateContextLabel();
     }
 
     private View buildAttachmentChip(ImageAttachment attachment) {
@@ -1067,6 +1120,7 @@ public final class ChatScreen extends LinearLayout {
         private final TextView reasoningText;
         private final TextView processingText;
         private final TextView errorText;
+        private final TextView answerTime;
         private ChatMessage message;
         private boolean expanded;
         private String renderedContent;
@@ -1135,6 +1189,11 @@ public final class ChatScreen extends LinearLayout {
                     ViewGroup.LayoutParams.WRAP_CONTENT, ViewGroup.LayoutParams.WRAP_CONTENT);
             errorParams.topMargin = UiKit.dp(getContext(), 6);
             addView(errorText, errorParams);
+            answerTime = UiKit.text(getContext(), "", 11, UiKit.MUTED);
+            answerTime.setGravity(Gravity.END);
+            answerTime.setPadding(0, UiKit.dp(getContext(), 6), 0, 0);
+            addView(answerTime, new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
             applyBackground();
         }
 
@@ -1159,7 +1218,36 @@ public final class ChatScreen extends LinearLayout {
             }
             errorText.setText(value.getError());
             errorText.setVisibility(value.getError().isEmpty() ? View.GONE : View.VISIBLE);
+            long completedAt = value.getCompletedAtMillis();
+            boolean showTime = !user && !value.isPending() && completedAt > 0;
+            if (showTime) {
+                answerTime.setText(formatCompletedTime(getContext(), completedAt));
+                answerTime.setContentDescription("回答完成时间 "
+                        + answerTime.getText());
+            } else {
+                answerTime.setText("");
+                answerTime.setContentDescription(null);
+            }
+            answerTime.setVisibility(showTime ? View.VISIBLE : View.GONE);
             refreshProgress();
+        }
+
+        private static String formatCompletedTime(Context context, long completedAt) {
+            Date date = new Date(completedAt);
+            Calendar now = Calendar.getInstance();
+            Calendar completed = Calendar.getInstance();
+            completed.setTime(date);
+            String time = android.text.format.DateFormat.getTimeFormat(context).format(date);
+            if (now.get(Calendar.YEAR) == completed.get(Calendar.YEAR)
+                    && now.get(Calendar.DAY_OF_YEAR) == completed.get(Calendar.DAY_OF_YEAR)) {
+                return time;
+            }
+            String skeleton = now.get(Calendar.YEAR) == completed.get(Calendar.YEAR)
+                    ? "MMMd" : "yMMMd";
+            String pattern = android.text.format.DateFormat.getBestDateTimePattern(
+                    Locale.getDefault(), skeleton);
+            String dateText = new SimpleDateFormat(pattern, Locale.getDefault()).format(date);
+            return dateText + " " + time;
         }
 
         void refreshProgress() {

@@ -52,8 +52,8 @@ The Android version is defined once in `version.properties`, and both Gradle and
 `build-apk.ps1` use that file:
 
 ```properties
-versionCode=5
-versionName=1.0.4
+versionCode=6
+versionName=1.0.5
 ```
 
 For every installable update, increase `versionCode`; change `versionName` when
@@ -124,9 +124,17 @@ reasoning text / summary events in Responses, that text appears in a separate mu
 an expandable header. A live processing timeline shows each observed stage and its duration,
 even when no reasoning text arrives. Completed sections start collapsed and remain expandable;
 they preserve the timeline and explain when the API did not provide reasoning text.
+The provider and model selector also shows an estimated context size for the next request. The
+estimate follows the same 40-message window used when sending, includes the system prompt and
+pending draft or images, and counts each image as approximately 1K tokens. Actual token counts and
+window limits remain provider-specific.
 Replies saved by older versions retain their total time but cannot reconstruct unsaved stages.
 Reasoning never replaces the answer
 body; if only reasoning arrives, the app preserves it and explains that the answer is missing.
+Completed replies show their local completion time at the bottom right of the bubble.
+Replies from an earlier day include a localized date, and replies from an earlier year also
+include the year. The time follows the device's 12-hour or 24-hour setting and is saved with
+the conversation.
 For non-streaming fallback requests, the status says it is waiting for the complete answer.
 These stages reflect events received from the API, rather than an estimated completion percentage.
 Times are measured locally: total time starts when sending, and the thinking interval starts when
@@ -141,9 +149,10 @@ plain reasoning fields and textual `reasoning_details`; encrypted reasoning is n
 A relay that responds to a streaming request with `application/json` is read directly rather
 than sending the same request again.
 
-To verify reply progress on a disposable Android emulator, build the app and run
-`.\tests\progress\run-tests.ps1 -Serial emulator-5554`. The instrumentation uses local HTTP
-fixtures without a relay or API key and saves stage screenshots under `build/progress-tests/`.
+To verify reply progress on a disposable Android emulator, build the test APK and run
+`.\tests\progress\run-tests.ps1 -Serial emulator-5554 -TestBuild`. The instrumentation uses
+local HTTP fixtures without a relay or API key and saves stage screenshots under
+`build/progress-tests/`.
 
 ## Conversations
 

@@ -1,10 +1,17 @@
 param(
     [Parameter(Mandatory = $true)][string]$Serial,
-    [string]$SdkRoot = "D:\Android\Sdk"
+    [string]$SdkRoot = "D:\Android\Sdk",
+    [switch]$TestBuild
 )
 $ErrorActionPreference = "Stop"
 $workspace = [System.IO.Path]::GetFullPath((Join-Path $PSScriptRoot "..\.."))
 $output = Join-Path $workspace "build\progress-tests"
+$applicationId = if ($TestBuild) { "com.relaychat.app.debug" } else { "com.relaychat.app" }
+$appApk = if ($TestBuild) {
+    Join-Path $workspace "dist\RelayChat-test.apk"
+} else {
+    Join-Path $workspace "dist\RelayChat-debug.apk"
+}
 New-Item -ItemType Directory -Force $output, (Join-Path $output "classes"),
     (Join-Path $output "dex") | Out-Null
 $tools = Get-ChildItem (Join-Path $SdkRoot "build-tools") -Directory |
@@ -20,8 +27,15 @@ while ((& $adb -s $Serial shell getprop sys.boot_completed 2>$null) -ne "1") {
     if ([DateTime]::UtcNow -ge $bootDeadline) { throw "Emulator did not finish booting" }
     Start-Sleep -Milliseconds 500
 }
+$manifest = Get-Content -Raw (Join-Path $PSScriptRoot "AndroidManifest.xml")
+$manifest = $manifest.Replace(
+    'android:targetPackage="com.relaychat.app"',
+    'android:targetPackage="' + $applicationId + '"')
+$testManifest = Join-Path $output "AndroidManifest.xml"
+[System.IO.File]::WriteAllText(
+    $testManifest, $manifest, [System.Text.UTF8Encoding]::new($false))
 & (Join-Path $tools.FullName "aapt2.exe") link -o (Join-Path $output "base.apk") `
-    -I $androidJar --manifest (Join-Path $PSScriptRoot "AndroidManifest.xml") `
+    -I $androidJar --manifest $testManifest `
     --min-sdk-version 23 --target-sdk-version 36
 if ($LASTEXITCODE -ne 0) { throw "Test resource linking failed" }
 & javac -encoding UTF-8 -source 17 -target 17 -classpath "$androidJar;$appClasses" `
@@ -44,7 +58,7 @@ if (-not (Test-Path -LiteralPath $keystore)) { $keystore = Join-Path $workspace 
     --ks-pass pass:android --key-pass pass:android --v4-signing-enabled false `
     --out (Join-Path $output "tests.apk") (Join-Path $output "aligned.apk")
 if ($LASTEXITCODE -ne 0) { throw "Test signing failed" }
-& $adb -s $Serial install -r (Join-Path $workspace "dist\RelayChat-debug.apk")
+& $adb -s $Serial install -r $appApk
 if ($LASTEXITCODE -ne 0) { throw "App installation failed" }
 & $adb -s $Serial install -r (Join-Path $output "tests.apk")
 if ($LASTEXITCODE -ne 0) { throw "Test installation failed" }
@@ -54,6 +68,6 @@ $result | Tee-Object -FilePath (Join-Path $output "results.txt")
 if ($LASTEXITCODE -ne 0 -or -not ($result -match "PASS:")) { throw "Progress tests failed" }
 foreach ($stage in @("waiting", "thinking", "answering", "completed",
     "no-reasoning-waiting", "no-reasoning-completed")) {
-    & $adb -s $Serial pull "/sdcard/Android/data/com.relaychat.app/files/progress-$stage.png" $output
+    & $adb -s $Serial pull "/sdcard/Android/data/$applicationId/files/progress-$stage.png" $output
     if ($LASTEXITCODE -ne 0) { throw "Screenshot collection failed" }
 }

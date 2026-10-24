@@ -29,6 +29,7 @@ public final class ChatMessage {
     private String stage = "";
     private long processingDurationMs;
     private long reasoningDurationMs;
+    private long completedAtMillis;
     private long processingStartedNanos;
     private long reasoningStartedNanos;
     private final List<ProcessingStep> processingSteps = new ArrayList<>();
@@ -115,7 +116,16 @@ public final class ChatMessage {
         processingDurationMs = getProcessingDurationMs();
         processingStartedNanos = 0;
         finishReasoning();
+        completedAtMillis = System.currentTimeMillis();
         setStage(finalStage);
+    }
+
+    public long getCompletedAtMillis() {
+        return completedAtMillis;
+    }
+
+    public void setCompletedAtMillis(long completedAtMillis) {
+        this.completedAtMillis = Math.max(0, completedAtMillis);
     }
 
     private static long elapsedMs(long startedNanos) {
