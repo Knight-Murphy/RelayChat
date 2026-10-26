@@ -10,6 +10,7 @@ import android.text.style.QuoteSpan;
 import android.text.style.RelativeSizeSpan;
 import android.text.style.StrikethroughSpan;
 import android.text.style.StyleSpan;
+import android.text.style.SubscriptSpan;
 import android.text.style.TypefaceSpan;
 
 import java.util.List;
@@ -19,6 +20,7 @@ public final class MarkdownRenderer {
     private static final int SPAN_FLAGS = android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE;
     private static final String MONOSPACE = "monospace";
     private static final String SERIF = "serif";
+    private static final float SUBSCRIPT_SCALE = 0.72f;
 
     /** Colors and scaling used while styling one bubble. */
     public static final class Palette {
@@ -106,7 +108,11 @@ public final class MarkdownRenderer {
             }
             MarkdownText.Piece piece = block.pieces.get(index);
             int pieceStart = out.length();
-            out.append(piece.text);
+            if (block.kind == MarkdownText.CODE_BLOCK) {
+                out.append(piece.text);
+            } else {
+                appendDisplayText(out, piece.text);
+            }
             int pieceEnd = out.length();
             if (block.kind == MarkdownText.CODE_BLOCK) {
                 out.setSpan(new TypefaceSpan(MONOSPACE), pieceStart, pieceEnd, SPAN_FLAGS);
@@ -161,9 +167,67 @@ public final class MarkdownRenderer {
                                      Palette palette) {
         for (MarkdownText.Piece piece : pieces) {
             int start = out.length();
-            out.append(piece.text);
+            if ((piece.style & MarkdownText.CODE) != 0) {
+                out.append(piece.text);
+            } else {
+                appendDisplayText(out, piece.text);
+            }
             applyPieceStyle(out, start, out.length(), piece.style, palette);
         }
+    }
+
+    /**
+     * Android math fonts do not consistently contain every U+208x subscript glyph, which turns some
+     * digits into tofu boxes. Render the ASCII digit and use spans for the smaller, lower baseline.
+     */
+    private static void appendDisplayText(SpannableStringBuilder out, String text) {
+        int subscriptStart = -1;
+        for (int index = 0; index < text.length(); index++) {
+            char current = text.charAt(index);
+            String replacement = subscriptReplacement(current);
+            if (replacement == null) {
+                subscriptStart = finishSubscript(out, subscriptStart);
+                out.append(current);
+            } else {
+                if (subscriptStart < 0) {
+                    subscriptStart = out.length();
+                }
+                out.append(replacement);
+            }
+        }
+        finishSubscript(out, subscriptStart);
+    }
+
+    private static String subscriptReplacement(char value) {
+        if (value >= '\u2080' && value <= '\u2089') {
+            return String.valueOf((char) ('0' + value - '\u2080'));
+        }
+        switch (value) {
+            case '\u208a':
+                return "+";
+            case '\u208b':
+                return "-";
+            case '\u208c':
+                return "=";
+            case '\u208d':
+                return "(";
+            case '\u208e':
+                return ")";
+            default:
+                return null;
+        }
+    }
+
+    private static int finishSubscript(SpannableStringBuilder out, int start) {
+        if (start < 0) {
+            return -1;
+        }
+        int end = out.length();
+        if (end > start) {
+            out.setSpan(new SubscriptSpan(), start, end, SPAN_FLAGS);
+            out.setSpan(new RelativeSizeSpan(SUBSCRIPT_SCALE), start, end, SPAN_FLAGS);
+        }
+        return -1;
     }
 
     /** Text only table rendering, used when a caller styles whole blocks without the table widget. */

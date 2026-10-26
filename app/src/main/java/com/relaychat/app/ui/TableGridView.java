@@ -4,6 +4,8 @@ import android.content.Context;
 import android.graphics.Color;
 import android.graphics.Paint;
 import android.graphics.Typeface;
+import android.text.Layout;
+import android.text.TextPaint;
 import android.util.TypedValue;
 import android.view.Gravity;
 import android.view.View;
@@ -122,10 +124,10 @@ public final class TableGridView extends LinearLayout {
 
     private int[] measureColumns(MarkdownText.Table table, MarkdownRenderer.Palette palette,
                                  int edge, float textSp) {
-        Paint plain = new Paint(Paint.ANTI_ALIAS_FLAG);
+        TextPaint plain = new TextPaint(Paint.ANTI_ALIAS_FLAG);
         plain.setTextSize(TypedValue.applyDimension(TypedValue.COMPLEX_UNIT_SP, textSp,
                 getResources().getDisplayMetrics()));
-        Paint bold = new Paint(plain);
+        TextPaint bold = new TextPaint(plain);
         bold.setTypeface(Typeface.DEFAULT_BOLD);
         int shortest = palette.dp(MIN_COLUMN_DP);
         int longest = Math.max(shortest, palette.dp(MAX_COLUMN_DP));
@@ -133,8 +135,10 @@ public final class TableGridView extends LinearLayout {
         for (int column = 0; column < widths.length; column++) {
             int widest = 0;
             for (int row = 0; row < table.rowCount(); row++) {
-                Paint paint = row == 0 ? bold : plain;
-                int measured = Math.round(paint.measureText(table.plainCell(row, column)));
+                TextPaint paint = row == 0 ? bold : plain;
+                CharSequence content = MarkdownRenderer.renderPieces(
+                        table.cell(row, column), palette);
+                int measured = Math.round(Layout.getDesiredWidth(content, paint));
                 widest = Math.max(widest, measured);
             }
             widths[column] = Math.min(longest, Math.max(shortest, widest + edge * 2));
