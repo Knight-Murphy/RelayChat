@@ -3,6 +3,7 @@ package com.relaychat.app.data;
 import android.content.Context;
 
 import com.relaychat.app.model.ChatMessage;
+import com.relaychat.app.model.CodeExecution;
 import com.relaychat.app.model.Conversation;
 import com.relaychat.app.model.ImageAttachment;
 
@@ -24,7 +25,7 @@ import java.util.Set;
 public final class ConversationStore {
     private static final String FILE_NAME = "conversations.json";
     private static final String TEMP_FILE_NAME = "conversations.json.tmp";
-    private static final int VERSION = 5;
+    private static final int VERSION = 6;
 
     private final File file;
     private final File tempFile;
@@ -128,6 +129,27 @@ public final class ConversationStore {
                         }
                         encoded.put("images", images);
                     }
+                    if (!message.getCodeExecutions().isEmpty()) {
+                        JSONArray executions = new JSONArray();
+                        for (CodeExecution execution : message.getCodeExecutions()) {
+                            JSONObject encodedExecution = new JSONObject();
+                            encodedExecution.put("id", execution.getId());
+                            encodedExecution.put("code", execution.getCode());
+                            encodedExecution.put("logs", execution.getLogs());
+                            encodedExecution.put("status", execution.getStatus());
+                            JSONArray outputImages = new JSONArray();
+                            for (ImageAttachment image : execution.getImages()) {
+                                payload.images.add(image);
+                                payload.imageIds.add(image.getId());
+                                outputImages.put(new JSONObject()
+                                        .put("id", image.getId())
+                                        .put("mime", image.getMimeType()));
+                            }
+                            encodedExecution.put("images", outputImages);
+                            executions.put(encodedExecution);
+                        }
+                        encoded.put("code_executions", executions);
+                    }
                     messages.put(encoded);
                 }
                 item.put("messages", messages);
@@ -201,7 +223,10 @@ public final class ConversationStore {
         String error = interrupted ? "回复因应用进程结束而中断，已保留收到的内容，请重新发送"
                 : message.optString("error", "");
         String reasoning = message.optString("reasoning", "");
-        if (content.trim().isEmpty() && reasoning.isEmpty() && attachments.isEmpty() && error.isEmpty()
+        List<CodeExecution> codeExecutions = parseCodeExecutions(
+                message.optJSONArray("code_executions"));
+        if (content.trim().isEmpty() && reasoning.isEmpty() && attachments.isEmpty()
+                && codeExecutions.isEmpty() && error.isEmpty()
                 && message.optString("stage", "").isEmpty()) {
             return null;
         }
@@ -209,6 +234,7 @@ public final class ConversationStore {
                 message.optString("role", ChatMessage.ROLE_USER), content, attachments);
         parsed.setError(error);
         parsed.setReasoning(reasoning);
+        parsed.restoreCodeExecutions(codeExecutions);
         parsed.restoreDurations(message.optLong("processing_ms", 0), message.optLong("reasoning_ms", 0));
         parsed.setCompletedAtMillis(message.optLong("completed_at_ms", 0));
         List<ChatMessage.ProcessingStep> steps = new ArrayList<>();
@@ -228,6 +254,38 @@ public final class ConversationStore {
         parsed.restoreProcessingSteps(steps);
         parsed.setStage(interrupted ? ChatMessage.STAGE_INTERRUPTED : message.optString("stage", ""));
         return parsed;
+    }
+
+    private List<CodeExecution> parseCodeExecutions(JSONArray executions) {
+        List<CodeExecution> result = new ArrayList<>();
+        if (executions == null) {
+            return result;
+        }
+        for (int index = 0; index < executions.length(); index++) {
+            JSONObject execution = executions.optJSONObject(index);
+            if (execution == null) {
+                continue;
+            }
+            List<ImageAttachment> images = new ArrayList<>();
+            JSONArray imageArray = execution.optJSONArray("images");
+            if (imageArray != null) {
+                for (int imageIndex = 0; imageIndex < imageArray.length(); imageIndex++) {
+                    JSONObject image = imageArray.optJSONObject(imageIndex);
+                    if (image == null) {
+                        continue;
+                    }
+                    String id = image.optString("id", "");
+                    if (!id.isEmpty() && ImageStore.exists(id)) {
+                        images.add(new ImageAttachment(id,
+                                image.optString("mime", "image/png"), null));
+                    }
+                }
+            }
+            result.add(new CodeExecution(execution.optString("id", "python"),
+                    execution.optString("code", ""), execution.optString("logs", ""),
+                    execution.optString("status", ""), images));
+        }
+        return result;
     }
 
     private static String readText(File source) {

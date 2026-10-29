@@ -13,6 +13,7 @@ public final class ChatMessage {
     public static final String STAGE_CONNECTING = "connecting";
     public static final String STAGE_WAITING = "waiting";
     public static final String STAGE_THINKING = "thinking";
+    public static final String STAGE_PYTHON = "python";
     public static final String STAGE_ANSWERING = "answering";
     public static final String STAGE_FALLBACK = "fallback";
     public static final String STAGE_COMPLETED = "completed";
@@ -33,6 +34,7 @@ public final class ChatMessage {
     private long processingStartedNanos;
     private long reasoningStartedNanos;
     private final List<ProcessingStep> processingSteps = new ArrayList<>();
+    private final List<CodeExecution> codeExecutions = new ArrayList<>();
 
     public static final class ProcessingStep {
         private final String stage;
@@ -49,6 +51,34 @@ public final class ChatMessage {
 
     public List<ProcessingStep> getProcessingSteps() {
         return Collections.unmodifiableList(processingSteps);
+    }
+
+    public List<CodeExecution> getCodeExecutions() {
+        return Collections.unmodifiableList(codeExecutions);
+    }
+
+    public void upsertCodeExecution(CodeExecution execution) {
+        if (execution == null) {
+            return;
+        }
+        for (int index = 0; index < codeExecutions.size(); index++) {
+            if (codeExecutions.get(index).getId().equals(execution.getId())) {
+                codeExecutions.set(index, execution);
+                return;
+            }
+        }
+        codeExecutions.add(execution);
+    }
+
+    public void restoreCodeExecutions(List<CodeExecution> executions) {
+        codeExecutions.clear();
+        if (executions != null) {
+            for (CodeExecution execution : executions) {
+                if (execution != null) {
+                    codeExecutions.add(execution);
+                }
+            }
+        }
     }
 
     public void restoreProcessingSteps(List<ProcessingStep> steps) {

@@ -18,7 +18,7 @@ public final class ContextUsage {
         if (provider == null) {
             return 0;
         }
-        String systemPrompt = provider.getSystemPrompt();
+        String systemPrompt = DrawingProtocol.appendTo(provider.getSystemPrompt());
         int total = SYSTEM_OVERHEAD + estimateText(systemPrompt);
         List<ChatMessage> included = new ArrayList<>();
         if (messages != null) {

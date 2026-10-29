@@ -2,6 +2,7 @@ import java.util.Properties
 
 plugins {
     id("com.android.application")
+    id("com.chaquo.python")
 }
 
 val versionProperties = Properties().apply {
@@ -26,16 +27,23 @@ android {
 
     defaultConfig {
         applicationId = "com.relaychat.app"
-        minSdk = 23
+        minSdk = 24
         targetSdk = 36
         versionCode = appVersionCode
         versionName = appVersionName
+        manifestPlaceholders["appLabel"] =
+            if (project.hasProperty("normalBuild")) "@string/app_name" else "RelayChat Test"
+
+        ndk {
+            abiFilters += listOf("arm64-v8a", "x86_64")
+        }
     }
 
     buildTypes {
         debug {
-            applicationIdSuffix = ".debug"
-            versionNameSuffix = "-test"
+            val normalBuild = project.hasProperty("normalBuild")
+            applicationIdSuffix = if (normalBuild) null else ".debug"
+            versionNameSuffix = if (normalBuild) null else "-test"
         }
         release {
             isMinifyEnabled = false
@@ -53,5 +61,22 @@ android {
 
     buildFeatures {
         buildConfig = true
+    }
+
+    packaging {
+        jniLibs {
+            useLegacyPackaging = true
+        }
+    }
+}
+
+chaquopy {
+    defaultConfig {
+        version = "3.12"
+        buildPython("D:/Python3.12/python.exe")
+        pip {
+            install("numpy")
+            install("matplotlib")
+        }
     }
 }

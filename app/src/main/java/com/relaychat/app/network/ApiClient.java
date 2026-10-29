@@ -2,6 +2,7 @@ package com.relaychat.app.network;
 
 import com.relaychat.app.BuildConfig;
 import com.relaychat.app.model.ChatMessage;
+import com.relaychat.app.model.DrawingProtocol;
 import com.relaychat.app.model.ImageAttachment;
 import com.relaychat.app.model.ProviderProfile;
 
@@ -116,6 +117,7 @@ public final class ApiClient {
                     public void onStage(String stage) {
                         callback.onStage(stage);
                     }
+
                 };
 
                 if (ProviderProfile.MODE_RESPONSES.equals(provider.getMode())) {
@@ -163,7 +165,7 @@ public final class ApiClient {
                 if (cancelled) {
                     callback.onCancelled();
                 } else {
-                    callback.onError(error.getMessage());
+                    callback.onError(messageFor(error));
                 }
             } catch (Exception error) {
                 if (cancelled) {
@@ -403,7 +405,8 @@ public final class ApiClient {
     }
 
     private String performNonStreaming(ProviderProfile provider, List<ChatMessage> messages,
-                                       StreamCallback callback) throws Exception {
+                                       StreamCallback callback)
+            throws Exception {
         if (ProviderProfile.MODE_RESPONSES.equals(provider.getMode())) {
             return performResponsesNonStreaming(provider, messages, callback);
         }
@@ -445,7 +448,8 @@ public final class ApiClient {
     }
 
     private String performResponsesNonStreaming(ProviderProfile provider, List<ChatMessage> messages,
-                                               StreamCallback callback) throws Exception {
+                                               StreamCallback callback)
+            throws Exception {
         JSONObject payload = buildResponsesPayload(provider, messages, false);
         HttpURLConnection connection = openConnection(provider, "/responses", "POST", "application/json");
         activeConnection = connection;
@@ -480,11 +484,9 @@ public final class ApiClient {
         payload.put("model", provider.getSelectedModel());
         payload.put("stream", streaming);
         JSONArray input = new JSONArray();
-        if (!provider.getSystemPrompt().trim().isEmpty()) {
-            input.put(new JSONObject()
-                    .put("role", ChatMessage.ROLE_SYSTEM)
-                    .put("content", provider.getSystemPrompt().trim()));
-        }
+        input.put(new JSONObject()
+                .put("role", ChatMessage.ROLE_SYSTEM)
+                .put("content", DrawingProtocol.appendTo(provider.getSystemPrompt())));
         appendMessages(input, messages, false);
         payload.put("messages", input);
         return payload;
@@ -498,9 +500,7 @@ public final class ApiClient {
         if (!summaryUnsupported.contains(summaryKey(provider))) {
             payload.put("reasoning", new JSONObject().put("summary", "auto"));
         }
-        if (!provider.getSystemPrompt().trim().isEmpty()) {
-            payload.put("instructions", provider.getSystemPrompt().trim());
-        }
+        payload.put("instructions", DrawingProtocol.appendTo(provider.getSystemPrompt()));
         JSONArray input = new JSONArray();
         appendMessages(input, messages, true);
         payload.put("input", input);

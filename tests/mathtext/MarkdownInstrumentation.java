@@ -7,6 +7,7 @@ import android.graphics.Canvas;
 import android.os.Bundle;
 import android.text.Spanned;
 import android.text.style.SubscriptSpan;
+import android.text.style.SuperscriptSpan;
 import android.view.View;
 import android.view.ViewGroup;
 import android.widget.TextView;
@@ -34,7 +35,8 @@ public final class MarkdownInstrumentation extends Instrumentation {
                     + "| RAM6 | Y_6 | C000H\\sim DFFFH |\n"
                     + "| RAM7 | Y_7 | E000H\\sim FFFFH |\n"
                     + "| RAM8 | Y_8 | 10000H\\sim 11FFFH |\n"
-                    + "| RAM9 | Y_9 | 12000H\\sim 13FFFH |\n";
+                    + "| RAM9 | Y_9 | 12000H\\sim 13FFFH |\n\n"
+                    + "单程传播时延：5 × 10^{-6} s，也写作 5 \\times 10^{-6}\\ s。\n";
 
     @Override
     public void onCreate(Bundle arguments) {
@@ -47,7 +49,7 @@ public final class MarkdownInstrumentation extends Instrumentation {
         Bundle result = new Bundle();
         try {
             verifySubscripts();
-            result.putString("stream", "PASS: numeric subscripts render as spans without tofu\n");
+            result.putString("stream", "PASS: numeric scripts render as spans without tofu\n");
             finish(Activity.RESULT_OK, result);
         } catch (Throwable error) {
             result.putString("stream", "FAIL: " + android.util.Log.getStackTraceString(error));
@@ -60,6 +62,7 @@ public final class MarkdownInstrumentation extends Instrumentation {
         Bitmap[] rendered = new Bitmap[1];
         StringBuilder visible = new StringBuilder();
         boolean[] subscriptDigits = new boolean[10];
+        boolean[] superscriptState = new boolean[2];
         runOnMainSync(() -> {
             MarkdownView view = new MarkdownView(getTargetContext());
             view.setContentWidth(width);
@@ -68,7 +71,7 @@ public final class MarkdownInstrumentation extends Instrumentation {
                     View.MeasureSpec.makeMeasureSpec(width, View.MeasureSpec.EXACTLY),
                     View.MeasureSpec.makeMeasureSpec(4000, View.MeasureSpec.AT_MOST));
             view.layout(0, 0, width, view.getMeasuredHeight());
-            collectText(view, visible, subscriptDigits);
+            collectText(view, visible, subscriptDigits, superscriptState);
             rendered[0] = Bitmap.createBitmap(width, view.getMeasuredHeight(),
                     Bitmap.Config.ARGB_8888);
             view.draw(new Canvas(rendered[0]));
@@ -79,6 +82,14 @@ public final class MarkdownInstrumentation extends Instrumentation {
         char leftover = firstUnicodeSubscript(visible);
         require(leftover == 0, "Unicode subscript U+" + Integer.toHexString(leftover)
                 + " survived rendering: " + visible);
+        leftover = firstUnicodeSuperscript(visible);
+        require(leftover == 0, "Unicode superscript U+" + Integer.toHexString(leftover)
+                + " survived rendering: " + visible);
+        require(visible.indexOf("10-6") >= 0, "Negative exponent was not rendered as ASCII");
+        require(superscriptState[0],
+                "Superscript digits were not rendered with SuperscriptSpan");
+        require(superscriptState[1],
+                "Negative exponent sign was not rendered with SuperscriptSpan");
         for (int digit = 0; digit <= 9; digit++) {
             require(visible.indexOf("Y" + digit) >= 0, "Missing rendered subscript Y" + digit);
             require(subscriptDigits[digit], "Y" + digit + " was not rendered with SubscriptSpan");
@@ -86,7 +97,8 @@ public final class MarkdownInstrumentation extends Instrumentation {
         rendered[0].recycle();
     }
 
-    private static void collectText(View view, StringBuilder text, boolean[] subscriptDigits) {
+    private static void collectText(View view, StringBuilder text, boolean[] subscriptDigits,
+                                    boolean[] superscriptState) {
         if (view instanceof TextView) {
             CharSequence content = ((TextView) view).getText();
             text.append(content).append('\n');
@@ -103,12 +115,25 @@ public final class MarkdownInstrumentation extends Instrumentation {
                         }
                     }
                 }
+                for (SuperscriptSpan span : spanned.getSpans(
+                        0, content.length(), SuperscriptSpan.class)) {
+                    int start = spanned.getSpanStart(span);
+                    int end = spanned.getSpanEnd(span);
+                    for (int index = start; index < end; index++) {
+                        char value = content.charAt(index);
+                        if (value >= '0' && value <= '9') {
+                            superscriptState[0] = true;
+                        } else if (value == '-') {
+                            superscriptState[1] = true;
+                        }
+                    }
+                }
             }
         }
         if (view instanceof ViewGroup) {
             ViewGroup group = (ViewGroup) view;
             for (int index = 0; index < group.getChildCount(); index++) {
-                collectText(group.getChildAt(index), text, subscriptDigits);
+                collectText(group.getChildAt(index), text, subscriptDigits, superscriptState);
             }
         }
     }
@@ -117,6 +142,17 @@ public final class MarkdownInstrumentation extends Instrumentation {
         for (int index = 0; index < text.length(); index++) {
             char value = text.charAt(index);
             if (value >= '\u2080' && value <= '\u208e') {
+                return value;
+            }
+        }
+        return 0;
+    }
+
+    private static char firstUnicodeSuperscript(CharSequence text) {
+        for (int index = 0; index < text.length(); index++) {
+            char value = text.charAt(index);
+            if ((value >= '\u2070' && value <= '\u207e')
+                    || (value >= '\u00b9' && value <= '\u00b3')) {
                 return value;
             }
         }

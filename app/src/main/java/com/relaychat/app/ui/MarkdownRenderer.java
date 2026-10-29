@@ -11,6 +11,7 @@ import android.text.style.RelativeSizeSpan;
 import android.text.style.StrikethroughSpan;
 import android.text.style.StyleSpan;
 import android.text.style.SubscriptSpan;
+import android.text.style.SuperscriptSpan;
 import android.text.style.TypefaceSpan;
 
 import java.util.List;
@@ -20,7 +21,7 @@ public final class MarkdownRenderer {
     private static final int SPAN_FLAGS = android.text.Spanned.SPAN_EXCLUSIVE_EXCLUSIVE;
     private static final String MONOSPACE = "monospace";
     private static final String SERIF = "serif";
-    private static final float SUBSCRIPT_SCALE = 0.72f;
+    private static final float SCRIPT_SCALE = 0.72f;
 
     /** Colors and scaling used while styling one bubble. */
     public static final class Palette {
@@ -177,28 +178,62 @@ public final class MarkdownRenderer {
     }
 
     /**
-     * Android math fonts do not consistently contain every U+208x subscript glyph, which turns some
-     * digits into tofu boxes. Render the ASCII digit and use spans for the smaller, lower baseline.
+     * Android math fonts do not consistently contain every Unicode script glyph, which turns some
+     * digits and signs into tofu boxes. Render ASCII and use spans for the smaller shifted baseline.
      */
     private static void appendDisplayText(SpannableStringBuilder out, String text) {
-        int subscriptStart = -1;
+        int scriptStart = -1;
+        boolean superscript = false;
         for (int index = 0; index < text.length(); index++) {
             char current = text.charAt(index);
-            String replacement = subscriptReplacement(current);
+            boolean nextSuperscript = isUnicodeSuperscript(current);
+            String replacement = scriptReplacement(current, nextSuperscript);
             if (replacement == null) {
-                subscriptStart = finishSubscript(out, subscriptStart);
+                scriptStart = finishScript(out, scriptStart, superscript);
                 out.append(current);
             } else {
-                if (subscriptStart < 0) {
-                    subscriptStart = out.length();
+                if (scriptStart < 0 || superscript != nextSuperscript) {
+                    scriptStart = finishScript(out, scriptStart, superscript);
+                    scriptStart = out.length();
+                    superscript = nextSuperscript;
                 }
                 out.append(replacement);
             }
         }
-        finishSubscript(out, subscriptStart);
+        finishScript(out, scriptStart, superscript);
     }
 
-    private static String subscriptReplacement(char value) {
+    private static boolean isUnicodeSuperscript(char value) {
+        return (value >= '\u2070' && value <= '\u207e')
+                || (value >= '\u00b9' && value <= '\u00b3');
+    }
+
+    private static String scriptReplacement(char value, boolean superscript) {
+        if (superscript) {
+            if (value >= '\u2070' && value <= '\u2079') {
+                return String.valueOf((char) ('0' + value - '\u2070'));
+            }
+            switch (value) {
+                case '\u00b9':
+                    return "1";
+                case '\u00b2':
+                    return "2";
+                case '\u00b3':
+                    return "3";
+                case '\u207a':
+                    return "+";
+                case '\u207b':
+                    return "-";
+                case '\u207c':
+                    return "=";
+                case '\u207d':
+                    return "(";
+                case '\u207e':
+                    return ")";
+                default:
+                    return null;
+            }
+        }
         if (value >= '\u2080' && value <= '\u2089') {
             return String.valueOf((char) ('0' + value - '\u2080'));
         }
@@ -218,14 +253,18 @@ public final class MarkdownRenderer {
         }
     }
 
-    private static int finishSubscript(SpannableStringBuilder out, int start) {
+    private static int finishScript(SpannableStringBuilder out, int start, boolean superscript) {
         if (start < 0) {
             return -1;
         }
         int end = out.length();
         if (end > start) {
-            out.setSpan(new SubscriptSpan(), start, end, SPAN_FLAGS);
-            out.setSpan(new RelativeSizeSpan(SUBSCRIPT_SCALE), start, end, SPAN_FLAGS);
+            if (superscript) {
+                out.setSpan(new SuperscriptSpan(), start, end, SPAN_FLAGS);
+            } else {
+                out.setSpan(new SubscriptSpan(), start, end, SPAN_FLAGS);
+            }
+            out.setSpan(new RelativeSizeSpan(SCRIPT_SCALE), start, end, SPAN_FLAGS);
         }
         return -1;
     }

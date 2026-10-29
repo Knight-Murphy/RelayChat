@@ -3,6 +3,7 @@ package com.relaychat.app.ui;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
+import java.util.Locale;
 
 /**
  * Splits a reply into block and inline runs so the UI can style it without pulling in a Markdown
@@ -44,16 +45,29 @@ public final class MarkdownText {
         public final int level;
         public final List<Piece> pieces;
         public final Table table;
+        public final String language;
+        public final boolean closed;
 
         Block(int kind, int level, List<Piece> pieces) {
-            this(kind, level, pieces, null);
+            this(kind, level, pieces, null, "", true);
         }
 
         Block(int kind, int level, List<Piece> pieces, Table table) {
+            this(kind, level, pieces, table, "", true);
+        }
+
+        Block(int kind, int level, List<Piece> pieces, String language, boolean closed) {
+            this(kind, level, pieces, null, language, closed);
+        }
+
+        Block(int kind, int level, List<Piece> pieces, Table table, String language,
+              boolean closed) {
             this.kind = kind;
             this.level = level;
             this.pieces = pieces;
             this.table = table;
+            this.language = language == null ? "" : language;
+            this.closed = closed;
         }
     }
 
@@ -126,6 +140,8 @@ public final class MarkdownText {
             }
             if (trimmed.startsWith("```") || trimmed.startsWith("~~~")) {
                 String fence = trimmed.substring(0, 3);
+                String language = codeLanguage(trimmed.substring(3));
+                boolean closed = false;
                 index++;
                 List<Piece> pieces = new ArrayList<>();
                 while (index < lines.length && !lines[index].trim().startsWith(fence)) {
@@ -133,9 +149,10 @@ public final class MarkdownText {
                     index++;
                 }
                 if (index < lines.length) {
+                    closed = true;
                     index++;
                 }
-                blocks.add(new Block(CODE_BLOCK, 0, pieces));
+                blocks.add(new Block(CODE_BLOCK, 0, pieces, language, closed));
                 continue;
             }
             String closer = mathFenceCloser(trimmed);
@@ -209,6 +226,15 @@ public final class MarkdownText {
             }
             if (block.kind == TABLE && block.table != null) {
                 out.append(toPlainText(block.table));
+                continue;
+            }
+            if (block.kind == CODE_BLOCK) {
+                for (int index = 0; index < block.pieces.size(); index++) {
+                    if (index > 0) {
+                        out.append('\n');
+                    }
+                    out.append(block.pieces.get(index).text);
+                }
                 continue;
             }
             for (Piece piece : block.pieces) {
@@ -413,6 +439,21 @@ public final class MarkdownText {
             end--;
         }
         return value.substring(0, end);
+    }
+
+    private static String codeLanguage(String info) {
+        String value = info == null ? "" : info.trim();
+        if (value.isEmpty()) {
+            return "";
+        }
+        value = value.split("\\s+", 2)[0];
+        if (value.startsWith("{") && value.endsWith("}")) {
+            value = value.substring(1, value.length() - 1);
+        }
+        while (value.startsWith(".")) {
+            value = value.substring(1);
+        }
+        return value.toLowerCase(Locale.ROOT);
     }
 
     private static List<Piece> inlineConverted(String text) {

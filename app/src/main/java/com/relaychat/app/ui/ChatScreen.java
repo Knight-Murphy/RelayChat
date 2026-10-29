@@ -649,7 +649,6 @@ public final class ChatScreen extends LinearLayout {
             host.toast("请先选择或填写模型");
             return;
         }
-
         input.setText("");
         List<ImageAttachment> attachments = new ArrayList<>(pendingAttachments);
         pendingAttachments.clear();
@@ -1118,6 +1117,7 @@ public final class ChatScreen extends LinearLayout {
         private final TextView progressLabel;
         private final LinearLayout reasoningPanel;
         private final TextView reasoningText;
+        private final LinearLayout executionContainer;
         private final TextView processingText;
         private final TextView errorText;
         private final TextView answerTime;
@@ -1125,6 +1125,7 @@ public final class ChatScreen extends LinearLayout {
         private boolean expanded;
         private String renderedContent;
         private String renderedReasoning;
+        private String renderedExecutions;
 
         MessageBubble(ChatScreen screen, boolean user) {
             super(screen.getContext());
@@ -1180,6 +1181,12 @@ public final class ChatScreen extends LinearLayout {
             panelParams.bottomMargin = UiKit.dp(getContext(), 10);
             addView(reasoningPanel, panelParams);
 
+            executionContainer = UiKit.vertical(getContext());
+            LinearLayout.LayoutParams executionParams = new LinearLayout.LayoutParams(
+                    ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+            executionParams.bottomMargin = UiKit.dp(getContext(), 10);
+            addView(executionContainer, executionParams);
+
             body = screen.buildBody(contentWidth);
             addView(body, new LinearLayout.LayoutParams(
                     ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT));
@@ -1216,6 +1223,7 @@ public final class ChatScreen extends LinearLayout {
                 renderedReasoning = reasoning;
                 reasoningText.setText(reasoning);
             }
+            refreshExecutions(value);
             errorText.setText(value.getError());
             errorText.setVisibility(value.getError().isEmpty() ? View.GONE : View.VISIBLE);
             long completedAt = value.getCompletedAtMillis();
@@ -1230,6 +1238,37 @@ public final class ChatScreen extends LinearLayout {
             }
             answerTime.setVisibility(showTime ? View.VISIBLE : View.GONE);
             refreshProgress();
+        }
+
+        private void refreshExecutions(ChatMessage value) {
+            List<com.relaychat.app.model.CodeExecution> executions = value.getCodeExecutions();
+            StringBuilder signature = new StringBuilder();
+            for (com.relaychat.app.model.CodeExecution execution : executions) {
+                signature.append(execution.getId()).append(':')
+                        .append(execution.getStatus()).append(':')
+                        .append(execution.getCode().hashCode()).append(':')
+                        .append(execution.getLogs().hashCode()).append(':')
+                        .append(execution.getImages().size()).append('\n');
+            }
+            String next = signature.toString();
+            if (next.equals(renderedExecutions)) {
+                return;
+            }
+            renderedExecutions = next;
+            executionContainer.removeAllViews();
+            executionContainer.setVisibility(executions.isEmpty() ? View.GONE : View.VISIBLE);
+            int width = getWidth() > 0
+                    ? getWidth() - getPaddingLeft() - getPaddingRight()
+                    : UiKit.dp(getContext(), 520);
+            for (int index = 0; index < executions.size(); index++) {
+                CodeExecutionBlockView block = new CodeExecutionBlockView(getContext());
+                block.bind(executions.get(index), width, palette());
+                LinearLayout.LayoutParams params = new LinearLayout.LayoutParams(
+                        ViewGroup.LayoutParams.MATCH_PARENT, ViewGroup.LayoutParams.WRAP_CONTENT);
+                params.bottomMargin = index == executions.size() - 1
+                        ? 0 : UiKit.dp(getContext(), 8);
+                executionContainer.addView(block, params);
+            }
         }
 
         private static String formatCompletedTime(Context context, long completedAt) {
@@ -1333,6 +1372,7 @@ public final class ChatScreen extends LinearLayout {
                 case ChatMessage.STAGE_CONNECTING: return "正在连接";
                 case ChatMessage.STAGE_WAITING: return "等待模型响应";
                 case ChatMessage.STAGE_THINKING: return "正在思考";
+                case ChatMessage.STAGE_PYTHON: return "正在执行 Python";
                 case ChatMessage.STAGE_ANSWERING: return "正在生成回答";
                 case ChatMessage.STAGE_FALLBACK: return "正在等待完整回答";
                 case ChatMessage.STAGE_COMPLETED: return "回答完成";

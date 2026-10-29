@@ -8,15 +8,18 @@ import android.os.Looper;
 
 import com.relaychat.app.ReplyService;
 import com.relaychat.app.model.ChatMessage;
+import com.relaychat.app.model.CodeExecution;
 import com.relaychat.app.model.ContextUsage;
 import com.relaychat.app.model.Conversation;
 import com.relaychat.app.model.ProviderProfile;
+import com.relaychat.app.model.PythonCodeExtractor;
 import com.relaychat.app.network.ApiClient;
 
 import java.util.ArrayList;
 import java.util.List;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
+import java.util.concurrent.Future;
 
 /** Owns chat data and generation independently of any Activity. All state changes use the main thread. */
 public final class ChatSession {
@@ -28,6 +31,12 @@ public final class ChatSession {
     private final Handler main = new Handler(Looper.getMainLooper());
     private final ConversationStore store;
     private final ExecutorService storage = Executors.newSingleThreadExecutor();
+    private final ExecutorService python = Executors.newSingleThreadExecutor(runnable -> {
+        Thread thread = new Thread(runnable, "relaychat-python");
+        thread.setDaemon(true);
+        return thread;
+    });
+    private final LocalPythonExecutor localPython;
     private final ApiClient replies = new ApiClient();
     private final List<Conversation> conversations = new ArrayList<>();
     private final List<Listener> listeners = new ArrayList<>();
@@ -46,6 +55,7 @@ public final class ChatSession {
     public ChatSession(Context context) {
         this.context = context.getApplicationContext();
         store = new ConversationStore(context);
+        localPython = new LocalPythonExecutor(this.context);
         ConversationStore.LoadedState loaded = store.load();
         conversations.addAll(loaded.getConversations());
         activeId = loaded.getActiveId();
@@ -217,7 +227,7 @@ public final class ChatSession {
 
             @Override
             public void onComplete(String text) {
-                main.post(() -> finish(pending, text, ""));
+                main.post(() -> completeReply(pending, text));
             }
 
             @Override
@@ -236,6 +246,11 @@ public final class ChatSession {
         if (request == null || request.finishing) {
             return;
         }
+        if (request.pythonFuture != null) {
+            request.pythonFuture.cancel(true);
+            finish(request, request.text.toString(), "", ChatMessage.STAGE_STOPPED);
+            return;
+        }
         if (!request.started) {
             finish(request, null, "", ChatMessage.STAGE_STOPPED);
         } else {
@@ -248,6 +263,33 @@ public final class ChatSession {
             replies.cancel();
             finish(request, null, reason);
         }
+    }
+
+    private void completeReply(Request pending, String fullText) {
+        if (request != pending || pending.finishing || pending.pythonStarted) {
+            return;
+        }
+        pending.assistant.setContent(fullText == null ? "" : fullText);
+        String code = PythonCodeExtractor.extractFirstBlock(fullText);
+        if (code == null) {
+            finish(pending, fullText, "");
+            return;
+        }
+        pending.pythonStarted = true;
+        pending.assistant.setPending(true);
+        pending.assistant.setStage(ChatMessage.STAGE_PYTHON);
+        notifyListeners();
+        persist();
+        pending.pythonFuture = python.submit(() -> {
+            CodeExecution execution = localPython.execute(code);
+            main.post(() -> {
+                if (request != pending || pending.finishing) {
+                    return;
+                }
+                pending.assistant.upsertCodeExecution(execution);
+                finish(pending, fullText, "");
+            });
+        });
     }
 
     private void finish(Request pending, String fullText, String error) {
@@ -327,6 +369,8 @@ public final class ChatSession {
         final StringBuilder reasoning = new StringBuilder();
         boolean started;
         boolean finishing;
+        boolean pythonStarted;
+        Future<?> pythonFuture;
 
         Request(long id, String conversationId, ProviderProfile provider, List<ChatMessage> messages,
                 ChatMessage assistant) {

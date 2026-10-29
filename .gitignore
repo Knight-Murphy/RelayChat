@@ -5,3 +5,5 @@ dist/*.apk
 dist/*.idsig
 keystore/
 local.properties
+__pycache__/
+*.pyc

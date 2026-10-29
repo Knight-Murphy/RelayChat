@@ -15,6 +15,9 @@ RelayChat is a small Android client for OpenAI-compatible API relays. It support
   received-character count while the answer streams. Reply processing history can be expanded
   even when the relay does not return reasoning text.
 - Render replies with formatting: headings, lists, quotes, tables, code blocks, bold/italic text and LaTeX math.
+- Render model-authored SVG, Mermaid and numeric waveform blocks locally in the chat.
+- Run model-authored Python with the Chaquopy CPython runtime embedded in the APK, using local
+  NumPy and Matplotlib, then render its code, logs and generated images in an execution card.
 - Stop an in-progress response.
 - Keep generating replies in a foreground service after leaving the app, and notify when a reply is saved.
 - Attach up to 20 images to a message with the image button; they are sent to vision-capable models.
@@ -54,8 +57,8 @@ The Android version is defined once in `version.properties`, and both Gradle and
 `build-apk.ps1` use that file:
 
 ```properties
-versionCode=6
-versionName=1.0.5
+versionCode=11
+versionName=2.0.0
 ```
 
 For every installable update, increase `versionCode`; change `versionName` when
@@ -172,6 +175,63 @@ To verify reply progress on a disposable Android emulator, build the test APK an
 `.\tests\progress\run-tests.ps1 -Serial emulator-5554 -TestBuild`. The instrumentation uses
 local HTTP fixtures without a relay or API key and saves stage screenshots under
 `build/progress-tests/`.
+
+## Local diagrams
+
+Text and reasoning models do not need to return a bitmap to draw in RelayChat. The app appends a
+drawing contract to the selected provider's system prompt and asks the model to return a complete
+fenced block in one of these formats:
+
+````text
+```svg
+<svg viewBox="0 0 320 160">...</svg>
+```
+
+```mermaid
+flowchart LR
+  A[Input] --> B[Load]
+```
+
+```waveform
+{"title":"Ud","xLabel":"omega t","yLabel":"V","series":[
+  {"name":"Ud","color":"#246b8a","points":[[0,0],[1,1.2],[2,0]]}
+]}
+```
+````
+
+SVG is best for precise circuits and mathematical geometry. Mermaid is best for flows, sequences
+and relationships. Waveform JSON is best for electrical curves: each series contains numeric `x`
+and `y` points and may set `step` to `true` for a digital signal. `chart` and `plot` are accepted as
+aliases for `waveform`.
+
+Diagrams render entirely on the device and do not call an image-generation service. Mermaid is
+bundled in the APK, SVG is restricted to a safe drawing subset, and WebViews have network, file and
+content access disabled. Tap a drawing to open it full screen; tap and zoom controls are available
+there. A malformed or unsupported block falls back to its source instead of showing a blank area.
+Long-press a drawing in the conversation to copy its source.
+
+To verify all three renderers and their error fallback on a disposable emulator, build the test APK
+and run `.\tests\diagrams\run-tests.ps1 -Serial emulator-5554`. Screenshots are saved under
+`build/diagram-tests/`.
+
+## Python execution
+
+Python 3.12, NumPy and Matplotlib are bundled through Chaquopy and run on the Android device.
+Both Chat Completions and Responses providers can use this capability; the relay does not need a
+server-side code interpreter tool. RelayChat appends a local-execution contract to the system
+prompt, extracts the first complete `python` fenced block from the model reply, and runs it in an
+empty per-request temporary directory.
+
+`print()` output and Python tracebacks are captured. `plt.show()` and `savefig()` outputs are
+stored with the conversation, shown in an expandable `执行 Python 代码` card, and can be opened in
+the full-screen image viewer. The runtime restricts the working directory and image collection to
+the app cache, but it is not a hardened security sandbox. Model-authored code therefore has the
+same Android app-process permissions as RelayChat.
+
+To verify embedded CPython startup, stdout and traceback capture, `plt.show()`, `savefig()`,
+end-to-end reply execution, image display, code-block folding and persistence, build the test APK
+and run `.\tests\python\run-tests.ps1 -Serial emulator-5554`. Screenshots are saved under
+`build/python-tests/`.
 
 ## Conversations
 

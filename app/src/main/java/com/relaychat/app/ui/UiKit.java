@@ -38,6 +38,7 @@ public final class UiKit {
 
     public enum Icon {
         MENU, USERS, GEAR, REFRESH, IMAGE, SEND, CHAT, PLUS,
+        TERMINAL,
         CHEVRON_DOWN, CHEVRON_UP, TRIANGLE_DOWN, TRIANGLE_UP,
         CLOSE, PENCIL, COMPOSE, ERASER, UNDO, REDO, TRASH, ROTATE_LEFT, ROTATE_RIGHT
     }
@@ -373,6 +374,16 @@ public final class UiKit {
                 case PLUS:
                     canvas.drawLine(12 * unit, 5 * unit, 12 * unit, 19 * unit, paint);
                     canvas.drawLine(5 * unit, 12 * unit, 19 * unit, 12 * unit, paint);
+                    break;
+                case TERMINAL:
+                    canvas.drawRoundRect(3 * unit, 5 * unit, 21 * unit, 19 * unit,
+                            2 * unit, 2 * unit, paint);
+                    path.reset();
+                    path.moveTo(7 * unit, 9 * unit);
+                    path.lineTo(10 * unit, 12 * unit);
+                    path.lineTo(7 * unit, 15 * unit);
+                    canvas.drawPath(path, paint);
+                    canvas.drawLine(12 * unit, 15 * unit, 17 * unit, 15 * unit, paint);
                     break;
                 case CHEVRON_DOWN:
                     canvas.drawLine(5 * unit, 9 * unit, 12 * unit, 16 * unit, paint);

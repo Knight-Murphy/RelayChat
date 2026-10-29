@@ -1,0 +1,7 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    package="com.relaychat.app.diagrams.tests">
+    <application android:label="RelayChat diagram tests" />
+    <instrumentation android:name="com.relaychat.app.diagrams.DiagramInstrumentation"
+        android:targetPackage="com.relaychat.app.debug" />
+</manifest>

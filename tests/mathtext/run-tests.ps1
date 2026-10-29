@@ -11,18 +11,23 @@ $tools = Get-ChildItem (Join-Path $SdkRoot "build-tools") -Directory |
     Where-Object { $_.Name -match "^\d+\.\d+\.\d+$" } |
     Sort-Object { [version]$_.Name } -Descending | Select-Object -First 1
 $androidJar = Join-Path $SdkRoot "platforms\android-36\android.jar"
-$appClasses = Join-Path $workspace "build\manual\classes.jar"
+$appClassesDir = Join-Path $workspace "app\build\intermediates\javac\debug\compileDebugJavaWithJavac\classes"
+$appClasses = Join-Path $output "app-classes.jar"
+$appResources = Join-Path $workspace "app\build\intermediates\compile_and_runtime_not_namespaced_r_class_jar\debug\processDebugResources\R.jar"
+& jar cf $appClasses -C $appClassesDir .
+if ($LASTEXITCODE -ne 0) { throw "Application class packaging failed" }
+$compileClasspath = "$androidJar;$appClasses;$appResources"
 $adb = Join-Path $SdkRoot "platform-tools\adb.exe"
 & (Join-Path $tools.FullName "aapt2.exe") link -o (Join-Path $output "base.apk") `
     -I $androidJar --manifest (Join-Path $PSScriptRoot "AndroidManifest.xml") `
-    --min-sdk-version 23 --target-sdk-version 36
+    --min-sdk-version 24 --target-sdk-version 36
 if ($LASTEXITCODE -ne 0) { throw "Test resource linking failed" }
-& javac -encoding UTF-8 -source 17 -target 17 -classpath "$androidJar;$appClasses" `
+& javac -encoding UTF-8 -source 17 -target 17 -classpath $compileClasspath `
     -d (Join-Path $output "classes") (Join-Path $PSScriptRoot "MarkdownInstrumentation.java")
 if ($LASTEXITCODE -ne 0) { throw "Test compilation failed" }
 & jar cf (Join-Path $output "classes.jar") -C (Join-Path $output "classes") .
 if ($LASTEXITCODE -ne 0) { throw "Test jar failed" }
-& (Join-Path $tools.FullName "d8.bat") --min-api 23 --lib $androidJar `
+& (Join-Path $tools.FullName "d8.bat") --min-api 24 --lib $androidJar `
     --classpath $appClasses --output (Join-Path $output "dex") (Join-Path $output "classes.jar")
 if ($LASTEXITCODE -ne 0) { throw "Test dexing failed" }
 Copy-Item -LiteralPath (Join-Path $output "base.apk") -Destination (Join-Path $output "unsigned.apk") -Force

@@ -3,5 +3,5 @@
     package="com.relaychat.app.conversations.tests">
     <application android:label="RelayChat conversation tests" />
     <instrumentation android:name="com.relaychat.app.conversations.ConversationInstrumentation"
-        android:targetPackage="com.relaychat.app" />
+        android:targetPackage="com.relaychat.app.debug" />
 </manifest>
