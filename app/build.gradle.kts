@@ -5,6 +5,25 @@ plugins {
     id("com.chaquo.python")
 }
 
+fun resolveBuildPython(): String {
+    for (candidate in listOf("D:/Python3.12/python.exe", "python3.12", "python3", "python")) {
+        try {
+            val process = ProcessBuilder(candidate, "-c",
+                "import sys; raise SystemExit(0 if sys.version_info[:2] == (3, 12) else 1)")
+                .redirectErrorStream(true)
+                .start()
+            if (process.waitFor() == 0) {
+                return candidate
+            }
+        } catch (_: Exception) {
+            // Try the next interpreter.
+        }
+    }
+    error("Python 3.12 is required to build RelayChat")
+}
+
+val selectedBuildPython = resolveBuildPython()
+
 val versionProperties = Properties().apply {
     val versionFile = rootProject.file("version.properties")
     require(versionFile.isFile) {
@@ -73,7 +92,7 @@ android {
 chaquopy {
     defaultConfig {
         version = "3.12"
-        buildPython("D:/Python3.12/python.exe")
+        buildPython(selectedBuildPython)
         pip {
             install("numpy")
             install("matplotlib")
